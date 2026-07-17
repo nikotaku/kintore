@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#e8332a">
+<title>筋トレ＆食事 MEMO</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ============ ホーム ============ -->
+    <section class="view" id="view-home">
+      <header class="app-header">
+        <button class="icon-btn" id="btn-settings" aria-label="設定">⚙</button>
+        <h1>筋トレ＆食事 MEMO</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <div class="hero">
+        <div class="hero-grid">
+          <div class="cal-wrap" id="home-calendar"></div>
+          <div class="stats-col">
+            <div class="stat-card">
+              <div class="stat-title">合計負荷量/7日間</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-7d">0 t</span>
+                <span class="stat-compare" id="stat-cmp-7d">🚗 × 0.0</span>
+              </div>
+              <div class="week-bars" id="week-bars"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">合計負荷量/28日間</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-28d">0 t</span>
+                <span class="stat-compare" id="stat-cmp-28d">🚌 × 0.0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">総合計負荷量</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-all">0 t</span>
+                <span class="stat-compare" id="stat-cmp-all">✈️ × 0.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="archive-row">
+          <span class="archive-label">MONTHLY<br>ARCHIVE</span>
+          <span class="archive-days"><b id="month-days">0</b> days</span>
+          <span class="archive-total">TOTAL <b id="total-days">0</b> days</span>
+        </div>
+      </div>
+
+      <div class="home-body">
+        <div class="action-row">
+          <button class="btn-primary" id="btn-add-training">＋ トレーニングを追加</button>
+          <button class="btn-outline" id="btn-rm-calc">🏋 RM 計算機</button>
+        </div>
+
+        <h2 class="section-heading" id="home-date-heading"></h2>
+        <div id="home-workout-list"></div>
+
+        <h2 class="section-heading">🍽 食事サマリ</h2>
+        <div class="card meal-summary" id="home-meal-summary"></div>
+      </div>
+    </section>
+
+    <!-- ============ 履歴/分析 ============ -->
+    <section class="view" id="view-history" hidden>
+      <header class="app-header slim"><h1>履歴 / 分析</h1></header>
+      <div class="part-tabs" id="part-tabs"></div>
+      <div class="seg-toggle">
+        <button class="seg active" data-mode="calendar">カレンダー</button>
+        <button class="seg" data-mode="graph">グラフ</button>
+      </div>
+      <div id="history-calendar-pane">
+        <div class="cal-wrap light" id="history-calendar"></div>
+        <div id="history-day-detail"></div>
+      </div>
+      <div id="history-graph-pane" hidden>
+        <div class="card">
+          <h3 class="card-title">週別 合計負荷量 (kg)</h3>
+          <div class="chart-box" id="chart-volume"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">種目別 推定1RMの推移</h3>
+          <select id="chart-exercise-select" class="input"></select>
+          <div class="chart-box" id="chart-rm"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 食事 ============ -->
+    <section class="view" id="view-meals" hidden>
+      <header class="app-header slim"><h1>食事管理</h1></header>
+      <div class="date-nav">
+        <button class="icon-btn dark" id="meal-prev">‹</button>
+        <span id="meal-date-label"></span>
+        <button class="icon-btn dark" id="meal-next">›</button>
+      </div>
+      <div class="card" id="meal-totals"></div>
+      <div id="meal-sections"></div>
+    </section>
+
+    <!-- ============ 体組成 ============ -->
+    <section class="view" id="view-body" hidden>
+      <header class="app-header slim"><h1>体組成</h1></header>
+      <div class="card">
+        <h3 class="card-title">今日の記録</h3>
+        <div class="form-row">
+          <label>体重 (kg)<input type="number" step="0.1" min="0" id="body-weight" class="input" inputmode="decimal"></label>
+          <label>体脂肪率 (%)<input type="number" step="0.1" min="0" id="body-fat" class="input" inputmode="decimal"></label>
+        </div>
+        <button class="btn-primary full" id="btn-save-body">記録する</button>
+      </div>
+      <div class="card">
+        <h3 class="card-title">体重の推移</h3>
+        <div class="chart-box" id="chart-weight"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">体脂肪率の推移</h3>
+        <div class="chart-box" id="chart-fat"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">記録一覧</h3>
+        <div id="body-log-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section class="view" id="view-settings" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-settings-back">‹</button>
+        <h1>設定</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <div class="card">
+        <h3 class="card-title">1日の目標（食事）</h3>
+        <div class="form-row wrap">
+          <label>カロリー (kcal)<input type="number" id="target-kcal" class="input" inputmode="numeric"></label>
+          <label>タンパク質 (g)<input type="number" id="target-p" class="input" inputmode="numeric"></label>
+          <label>脂質 (g)<input type="number" id="target-f" class="input" inputmode="numeric"></label>
+          <label>炭水化物 (g)<input type="number" id="target-c" class="input" inputmode="numeric"></label>
+        </div>
+        <button class="btn-primary full" id="btn-save-targets">保存</button>
+      </div>
+      <div class="card">
+        <h3 class="card-title">データ管理</h3>
+        <div class="btn-col">
+          <button class="btn-outline full" id="btn-export">📤 データをエクスポート (JSON)</button>
+          <button class="btn-outline full" id="btn-import">📥 データをインポート</button>
+          <input type="file" id="import-file" accept="application/json" hidden>
+          <button class="btn-danger full" id="btn-reset">🗑 全データを削除</button>
+        </div>
+      </div>
+      <div class="card about">
+        <p>筋トレ＆食事 MEMO — 自分専用のトレーニング・食事一元管理アプリ。データはこの端末のブラウザ内にのみ保存されます。</p>
+      </div>
+    </section>
+
+    <!-- ============ 種目選択 ============ -->
+    <section class="view" id="view-picker" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-picker-back">‹</button>
+        <h1 id="picker-date-label">種目を選択</h1>
+        <button class="text-btn" id="btn-picker-edit">Edit</button>
+      </header>
+      <div class="picker-toolbar">
+        <button class="btn-outline small" id="btn-add-part">＋ 部位・種目を追加</button>
+      </div>
+      <div id="picker-groups"></div>
+    </section>
+
+    <!-- ============ 日別ワークアウト詳細 ============ -->
+    <section class="view" id="view-workout" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-workout-back">‹</button>
+        <h1 id="workout-date-label"></h1>
+        <span class="header-spacer"></span>
+      </header>
+      <div class="workout-totals" id="workout-totals"></div>
+      <div id="workout-exercises"></div>
+      <button class="fab" id="btn-workout-add" aria-label="種目を追加">＋</button>
+    </section>
+  </div>
+
+  <!-- ============ ボトムナビ ============ -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-view="home"><span class="nav-icon">🏠</span>ホーム</button>
+    <button class="nav-item" data-view="history"><span class="nav-icon">📅</span>履歴/分析</button>
+    <button class="nav-item" data-view="meals"><span class="nav-icon">🍽</span>食事</button>
+    <button class="nav-item" data-view="body"><span class="nav-icon">⚖️</span>体組成</button>
+  </nav>
+
+  <!-- ============ モーダル ============ -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" id="modal-box" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
