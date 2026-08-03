@@ -128,6 +128,10 @@ body {
 /* ---------- Home body ---------- */
 .home-body { padding: 16px 14px; }
 .action-row { display: flex; gap: 10px; margin-bottom: 18px; }
+.quick-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.quick-actions .btn-primary { grid-column: 1 / -1; }
+.quick-actions .btn-outline { min-width: 0; padding: 11px 8px; }
+.quick-actions .btn-outline.run { color: var(--green); border-color: var(--green); }
 
 .btn-primary {
   background: var(--red); color: #fff; border: none;
@@ -135,6 +139,7 @@ body {
   cursor: pointer; flex: 1.6; box-shadow: 0 2px 6px rgba(232,51,42,.35);
 }
 .btn-primary:active { background: var(--red-dark); }
+.btn-primary:disabled, .btn-outline:disabled { opacity: .45; cursor: default; box-shadow: none; }
 .btn-outline {
   background: #fff; color: var(--red); border: 2px solid var(--red);
   border-radius: 14px; padding: 12px 14px; font-size: .95rem; font-weight: 700;
@@ -241,6 +246,11 @@ body {
 
 .meal-summary .kcal-line { font-size: 1.15rem; font-weight: 800; margin-bottom: 8px; }
 .meal-summary .kcal-line small { font-weight: 400; color: var(--text-sub); }
+.running-summary { display: flex; flex-direction: column; gap: 10px; }
+.running-summary-main { display: grid; grid-template-columns: 1.4fr 1fr 1fr; align-items: baseline; gap: 8px; }
+.running-summary-main strong { color: var(--green); font-size: 1.35rem; }
+.running-summary-main span { font-size: .85rem; text-align: right; }
+.summary-empty { color: var(--text-sub); font-size: .9rem; text-align: center; }
 
 /* ---------- Forms ---------- */
 .input {
@@ -267,7 +277,10 @@ body {
   width: 100%; text-align: left;
 }
 .picker-item:active { background: var(--red-pale); }
+.picker-item-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.picker-item-main small { color: var(--text-sub); font-size: .72rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 390px; }
 .picker-item .badge { color: var(--red); font-size: .8rem; font-weight: 700; }
+.video-badge { font-size: .8rem; }
 .picker-item .rm-hint { color: var(--text-sub); font-size: .78rem; }
 .picker-item-del { background: none; border: none; color: #c62828; font-size: 1.1rem; cursor: pointer; padding: 0 6px; }
 .picker-foot { display: flex; justify-content: space-between; padding: 10px 14px; }
@@ -293,6 +306,14 @@ body {
 }
 .ex-card-head .mv { display: flex; gap: 10px; }
 .ex-card-head .mv button, .ex-card-head .del { background: none; border: none; color: #fff; cursor: pointer; font-size: 1rem; opacity: .9; }
+.exercise-quickbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; background: #fff6e5; color: #765300; font-size: .75rem;
+}
+.exercise-quickbar button {
+  border: 1px solid #d99b16; background: #fff; color: #9a6500;
+  border-radius: 999px; padding: 6px 10px; font-weight: 700; cursor: pointer;
+}
 .set-head, .set-row {
   display: grid; grid-template-columns: 2rem 1fr 1fr 4.2rem 2rem;
   align-items: center; gap: 6px; padding: 8px 12px;
@@ -313,6 +334,12 @@ body {
   font-size: 1.3rem; color: #666; cursor: pointer;
 }
 
+.video-modal-body { min-height: 150px; }
+.form-video { display: block; width: 100%; max-height: 52vh; background: #111; border-radius: 12px; }
+.video-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; color: var(--text-sub); gap: 8px; }
+.video-empty span { font-size: 2.8rem; }
+.video-delete { display: block; margin: 10px auto 0; border: none; background: none; color: #c62828; padding: 6px 12px; cursor: pointer; }
+
 .fab {
   position: fixed; right: 18px; bottom: calc(var(--nav-h) + 18px);
   width: 58px; height: 58px; border-radius: 50%;
@@ -328,6 +355,28 @@ body {
 .body-log-row .d { color: var(--text-sub); }
 .body-log-row .del-btn { background: none; border: none; cursor: pointer; color: #999; font-size: 1rem; }
 
+/* ---------- Running ---------- */
+.run-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 12px; }
+.run-stat { background: var(--green); color: #fff; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.run-stat span { font-size: .75rem; opacity: .9; }
+.run-stat strong { font-size: 1.35rem; }
+.field-label { display: flex; flex-direction: column; gap: 5px; font-size: .8rem; color: var(--text-sub); margin-bottom: 12px; }
+.input-large { font-size: 1.35rem; font-weight: 800; color: var(--green); }
+.duration-label { font-size: .8rem; color: var(--text-sub); margin-bottom: 5px; }
+.duration-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.duration-inputs label { position: relative; }
+.duration-inputs input { padding-right: 28px; text-align: center; font-weight: 700; }
+.duration-inputs span { position: absolute; right: 8px; top: 12px; color: var(--text-sub); font-size: .7rem; pointer-events: none; }
+.pace-preview { margin: 12px 0; padding: 12px; background: #e8f5ee; color: #197642; border-radius: 10px; text-align: center; font-size: 1.15rem; font-weight: 800; }
+.run-log-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.run-log-main { min-width: 0; flex: 1; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
+.run-log-main strong { color: var(--green); }
+.run-log-main > span:not(.run-log-date) { font-size: .82rem; color: #444; text-align: right; }
+.run-log-main small { grid-column: 1 / -1; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-log-date { grid-column: 1 / -1; color: var(--text-sub); font-size: .72rem; }
+.run-log-row .del-btn { border: none; background: none; color: #999; padding: 8px; cursor: pointer; }
+.run-history-card { border-color: #69bd8b; }
+
 /* ---------- Bottom nav ---------- */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
@@ -340,6 +389,7 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; font-size: .7rem; color: #444;
 }
+.nav-item { font-size: .65rem; }
 .nav-item .nav-icon { font-size: 1.35rem; line-height: 1; }
 .nav-item.active { color: var(--red); font-weight: 700; }
 
