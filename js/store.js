@@ -1,6 +1,13 @@
 import { DEFAULT_PARTS, DEFAULT_EXERCISES, DEFAULT_TARGETS } from "./data.js";
 
 const KEY = "kintore-memo-v1";
+const DEFAULT_ADVICE = {
+  goals: ["国づくり", "居心地のいいコミュニティ作り", "健康の最適化"],
+  weaknesses: "",
+  notificationEnabled: true,
+  notificationTime: "08:00",
+  accountEmail: "",
+};
 
 function defaults() {
   return {
@@ -18,6 +25,7 @@ function defaults() {
     exerciseVideos: {},
     customFoods: [],
     targets: { ...DEFAULT_TARGETS },
+    advice: { ...DEFAULT_ADVICE, goals: [...DEFAULT_ADVICE.goals] },
   };
 }
 
@@ -28,7 +36,16 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaults();
     const parsed = JSON.parse(raw);
-    return { ...defaults(), ...parsed, targets: { ...DEFAULT_TARGETS, ...(parsed.targets || {}) } };
+    return {
+      ...defaults(),
+      ...parsed,
+      targets: { ...DEFAULT_TARGETS, ...(parsed.targets || {}) },
+      advice: {
+        ...DEFAULT_ADVICE,
+        ...(parsed.advice || {}),
+        goals: [...DEFAULT_ADVICE.goals],
+      },
+    };
   } catch (e) {
     console.error("failed to load state", e);
     return defaults();
@@ -38,6 +55,7 @@ function load() {
 export function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
+    window.dispatchEvent(new CustomEvent("kintore:state-saved", { detail: { state } }));
   } catch (e) {
     console.error("failed to save state", e);
   }
@@ -55,7 +73,16 @@ export function exportJSON() {
 export function importJSON(text) {
   const parsed = JSON.parse(text); // throws on invalid
   if (typeof parsed !== "object" || parsed === null) throw new Error("invalid data");
-  state = { ...defaults(), ...parsed };
+  state = {
+    ...defaults(),
+    ...parsed,
+    targets: { ...DEFAULT_TARGETS, ...(parsed.targets || {}) },
+    advice: {
+      ...DEFAULT_ADVICE,
+      ...(parsed.advice || {}),
+      goals: [...DEFAULT_ADVICE.goals],
+    },
+  };
   save();
 }
 

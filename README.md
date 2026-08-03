@@ -45,10 +45,19 @@
 - 体重・体脂肪率の記録と推移グラフ
 
 ### ⚙️ その他
-- データはブラウザの localStorage に保存（完全ローカル・自分専用）
+- 通常データはブラウザの localStorage に保存
 - フォーム動画はブラウザの IndexedDB に保存（最大250MB/本）
 - JSONエクスポート / インポートでバックアップ・引っ越し可能
 - PWA対応（ホーム画面に追加してアプリのように使える・オフライン動作）
+
+### 🌱 毎日のLINEアドバイス
+- トレーニング・ランニング・食事・体組成の履歴を本人認証付きで同期
+- 入力した弱点と「国づくり」「居心地のいいコミュニティ作り」「健康の最適化」を軸に毎日の行動を提案
+- 初期値は毎朝8:00（設定画面から変更・停止可能）
+- `newkyasukan` の「全力エステ予約通知用」LINEから配信
+- 履歴と弱点の分析はSupabase内で完結し、外部AIへ個人データを送信しない
+
+LINEのアクセストークンと送信先IDはこの公開リポジトリには置かず、`newkyasukan` のSupabase Edge Function内だけで参照します。LINE連携中のみ、助言に使う履歴が本人専用のRLS領域へ同期されます。フォーム動画本体は同期しません。
 
 ## 使い方
 
@@ -64,7 +73,8 @@ GitHub Pages 等の静的ホスティングにそのまま置けます（リポ�
 
 ## 技術構成
 
-- HTML / CSS / Vanilla JavaScript（ESモジュール）— フレームワーク・依存ライブラリなし
+- HTML / CSS / Vanilla JavaScript（ESモジュール）
+- Supabase JS（本人認証・履歴同期・Edge Function呼び出し）
 - チャートは自前の軽量SVG描画
 - Service Worker によるオフラインキャッシュ
 
@@ -80,7 +90,8 @@ localStorage["kintore-memo-v1"] = {
   runs:       { "YYYY-MM-DD": [{ id, distance, durationSec, paceSec, memo }] },
   exerciseVideos: { exerciseId: { name, type, size, updatedAt } },
   customFoods: [{ name, kcal, p, f, c, unit }],   // 100gあたり
-  targets:    { kcal, p, f, c }
+  targets:    { kcal, p, f, c },
+  advice:     { goals, weaknesses, notificationEnabled, notificationTime, accountEmail }
 }
 ```
 
