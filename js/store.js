@@ -12,6 +12,10 @@ function defaults() {
     meals: {},
     // body: { "YYYY-MM-DD": { weight, fat } }
     body: {},
+    // runs: { "YYYY-MM-DD": [ {id, distance, durationSec, paceSec, memo} ] }
+    runs: {},
+    // 動画本体は IndexedDB。ここには表示用メタデータのみ保存する
+    exerciseVideos: {},
     customFoods: [],
     targets: { ...DEFAULT_TARGETS },
   };
