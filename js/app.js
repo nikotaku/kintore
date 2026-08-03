@@ -2,6 +2,7 @@ import { state, save, resetAll, exportJSON, importJSON, uid } from "./store.js";
 import { FOOD_DB, MEAL_TYPES, VOLUME_COMPARES } from "./data.js";
 import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc, el } from "./util.js";
 import { lineChart, barChart } from "./charts.js";
+import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
 
 /* ================= グローバルUI状態 ================= */
 const ui = {
@@ -13,6 +14,7 @@ const ui = {
   historyMode: "calendar",
   historySelected: null,
   mealDate: todayKey(),
+  runDate: todayKey(),
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
@@ -39,7 +41,14 @@ function openModal(html) {
   bd.hidden = false;
   return box;
 }
-function closeModal() { $("#modal-backdrop").hidden = true; }
+let activeVideoUrl = null;
+function closeModal() {
+  if (activeVideoUrl) {
+    URL.revokeObjectURL(activeVideoUrl);
+    activeVideoUrl = null;
+  }
+  $("#modal-backdrop").hidden = true;
+}
 $("#modal-backdrop").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeModal();
 });
@@ -82,7 +91,45 @@ function totalVolume() {
 }
 
 function workoutDays() {
-  return Object.keys(state.workouts).filter(k => dayVolume(k) > 0 || (state.workouts[k] || []).some(e => e.sets.length));
+  const days = new Set(Object.keys(state.workouts).filter(k => dayVolume(k) > 0 || (state.workouts[k] || []).some(e => e.sets.length)));
+  Object.keys(state.runs || {}).forEach(k => {
+    if ((state.runs[k] || []).length) days.add(k);
+  });
+  return [...days];
+}
+
+function runsForDay(key) {
+  return state.runs?.[key] || [];
+}
+
+function runDistance(key) {
+  return runsForDay(key).reduce((sum, run) => sum + (Number(run.distance) || 0), 0);
+}
+
+function formatDuration(totalSeconds) {
+  const sec = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatPace(paceSeconds) {
+  const sec = Math.max(0, Math.round(Number(paceSeconds) || 0));
+  if (!sec) return "—";
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+function formatDistance(distance) {
+  return Number(distance || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+}
+
+function lastExerciseEntryBefore(exerciseId, key) {
+  for (const date of Object.keys(state.workouts).filter(k => k < key).sort().reverse()) {
+    const entry = (state.workouts[date] || []).find(en => en.exerciseId === exerciseId && en.sets?.length);
+    if (entry) return { date, entry };
+  }
+  return null;
 }
 
 // 週の開始（月曜）キー
@@ -118,7 +165,7 @@ function showView(name) {
     b.classList.toggle("active", b.dataset.view === name);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout };
   renderers[name]?.();
 }
 
@@ -240,6 +287,33 @@ function renderHome() {
     }
   }
 
+  const previousWorkoutDate = Object.keys(state.workouts)
+    .filter(k => k < ui.selectedDate && (state.workouts[k] || []).length)
+    .sort().reverse()[0];
+  $("#btn-copy-workout").disabled = !previousWorkoutDate;
+
+  // 選択日のランニング
+  const dayRuns = runsForDay(ui.selectedDate);
+  const runWrap = $("#home-running-summary");
+  if (!dayRuns.length) {
+    runWrap.innerHTML = `<div class="summary-empty">まだ記録がありません</div>
+      <button class="btn-outline full" id="btn-home-run">ランニングを記録する</button>`;
+  } else {
+    const distance = runDistance(ui.selectedDate);
+    const duration = dayRuns.reduce((sum, run) => sum + (Number(run.durationSec) || 0), 0);
+    const pace = distance ? duration / distance : 0;
+    runWrap.innerHTML = `<div class="running-summary-main">
+        <strong>${formatDistance(distance)} km</strong>
+        <span>${formatDuration(duration)}</span>
+        <span>${formatPace(pace)} /km</span>
+      </div>
+      <button class="btn-outline full" id="btn-home-run">記録を確認・追加</button>`;
+  }
+  $("#btn-home-run").addEventListener("click", () => {
+    ui.runDate = ui.selectedDate;
+    showView("running");
+  });
+
   // 食事サマリ
   const tot = mealDayTotals(ui.selectedDate);
   const tg = state.targets;
@@ -267,6 +341,33 @@ $("#btn-add-training").addEventListener("click", () => {
   ui.pickerDate = ui.selectedDate;
   ui.pickerFrom = "home";
   showView("picker");
+});
+$("#btn-copy-workout").addEventListener("click", () => {
+  const sourceKey = Object.keys(state.workouts)
+    .filter(k => k < ui.selectedDate && (state.workouts[k] || []).length)
+    .sort().reverse()[0];
+  if (!sourceKey) { toast("コピーできる過去の記録がありません"); return; }
+
+  const target = state.workouts[ui.selectedDate] || [];
+  const existingIds = new Set(target.map(en => en.exerciseId));
+  const additions = state.workouts[sourceKey]
+    .filter(en => !existingIds.has(en.exerciseId))
+    .map(en => ({
+      exerciseId: en.exerciseId,
+      name: en.name,
+      part: en.part,
+      sets: (en.sets || []).map(s => ({ w: s.w, r: s.r })),
+    }));
+  if (!additions.length) { toast("前回の種目はすべて追加済みです"); return; }
+  state.workouts[ui.selectedDate] = [...target, ...additions];
+  save();
+  ui.workoutDate = ui.selectedDate;
+  toast(`${sourceKey.replaceAll("-", "/")} のメニューをコピーしました`);
+  showView("workout");
+});
+$("#btn-quick-run").addEventListener("click", () => {
+  ui.runDate = ui.selectedDate;
+  showView("running");
 });
 $("#btn-settings").addEventListener("click", () => showView("settings"));
 
@@ -327,8 +428,12 @@ function renderPicker() {
     </div>`);
     for (const ex of exs) {
       const added = dayEntries.some(en => en.exerciseId === ex.id);
+      const previous = lastExerciseEntryBefore(ex.id, ui.pickerDate);
+      const hasVideo = Boolean(state.exerciseVideos?.[ex.id]);
       const row = el(`<button class="picker-item">
-        <span>${esc(ex.name)} ${added ? '<span class="badge">✔ 追加済</span>' : ""}</span>
+        <span class="picker-item-main"><span>${esc(ex.name)} ${hasVideo ? '<span class="video-badge">🎥</span>' : ""} ${added ? '<span class="badge">✔ 追加済</span>' : ""}</span>
+          ${previous ? `<small>前回 ${previous.entry.sets.map(s => `${Number(s.w) || 0}kg×${Number(s.r) || 0}`).join(" / ")}</small>` : ""}
+        </span>
         ${ui.pickerEdit ? '<span class="picker-item-del">🗑</span>' : ""}
       </button>`);
       row.addEventListener("click", () => {
@@ -434,17 +539,34 @@ function renderWorkout() {
     wrap.innerHTML = `<div class="empty-note" style="margin:12px">右下の＋から種目を追加してください</div>`;
   }
   entries.forEach((en, idx) => {
+    const exercise = state.exercises.find(ex => ex.id === en.exerciseId) || { id: en.exerciseId, name: entryName(en), part: entryPart(en) };
+    const previous = lastExerciseEntryBefore(en.exerciseId, key);
+    const hasVideo = Boolean(state.exerciseVideos?.[en.exerciseId]);
     const card = el(`<div class="ex-card">
       <div class="ex-card-head">
         <span>${esc(entryName(en))}</span>
         <span class="mv">
+          <button data-act="video" title="フォーム動画">${hasVideo ? "▶" : "🎥"}</button>
           <button data-act="up" title="上へ">∧</button>
           <button data-act="down" title="下へ">∨</button>
           <button data-act="del" class="del" title="削除">🗑</button>
         </span>
       </div>
+      ${previous ? `<div class="exercise-quickbar">
+        <span>前回 ${previous.date.replaceAll("-", "/")}</span>
+        <button data-act="copy-previous">重量・回数を反映</button>
+      </div>` : ""}
       <div class="set-head"><span>セット</span><span style="text-align:center">重さ(kg)</span><span style="text-align:center">回数</span><span style="text-align:center">RM</span><span></span></div>
     </div>`);
+
+    card.querySelector('[data-act="video"]').addEventListener("click", () => openExerciseVideo(exercise));
+    card.querySelector('[data-act="copy-previous"]')?.addEventListener("click", () => {
+      const hasValues = en.sets.some(s => s.w !== "" || s.r !== "");
+      if (hasValues && !confirm("現在の重量・回数を前回の記録で置き換えますか？")) return;
+      en.sets = previous.entry.sets.map(s => ({ w: s.w, r: s.r }));
+      save(); renderWorkout();
+      toast("前回の重量・回数を反映しました");
+    });
 
     card.querySelector('[data-act="up"]').addEventListener("click", () => {
       if (idx === 0) return;
@@ -485,6 +607,23 @@ function renderWorkout() {
       };
       wIn.addEventListener("input", onInput);
       rIn.addEventListener("input", onInput);
+      [wIn, rIn].forEach(input => input.addEventListener("focus", () => input.select()));
+      wIn.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); rIn.focus(); }
+      });
+      rIn.addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const rows = [...card.querySelectorAll(".set-row")];
+        const nextWeight = rows[si + 1]?.querySelector("input");
+        if (nextWeight) { nextWeight.focus(); return; }
+        en.sets.push({ w: wIn.value === "" ? "" : Number(wIn.value), r: rIn.value === "" ? "" : Number(rIn.value) });
+        save(); renderWorkout();
+        requestAnimationFrame(() => {
+          const inputs = [...document.querySelectorAll("#workout-exercises .ex-card")][idx]?.querySelectorAll(".set-row input");
+          inputs?.[inputs.length - 2]?.focus();
+        });
+      });
       row.querySelector(".del-btn").addEventListener("click", () => {
         en.sets.splice(si, 1);
         save(); renderWorkout();
@@ -512,6 +651,69 @@ function updateWorkoutTotals(key) {
   boxes[1].textContent = entries.reduce((a, e) => a + e.sets.length, 0);
   boxes[2].textContent = entries.reduce((a, e) => a + e.sets.reduce((b, s) => b + (Number(s.r) || 0), 0), 0);
   boxes[3].textContent = Math.round(dayVolume(key));
+}
+
+async function openExerciseVideo(exercise) {
+  if (activeVideoUrl) {
+    URL.revokeObjectURL(activeVideoUrl);
+    activeVideoUrl = null;
+  }
+  const box = openModal(`
+    <h3>🎥 ${esc(exercise.name)}のフォーム動画</h3>
+    <div class="video-modal-body" id="video-modal-body"><div class="chart-empty">読み込み中…</div></div>
+    <input type="file" id="form-video-file" accept="video/*" hidden>
+    <p class="hint">動画はこの端末内だけに保存されます。JSONのバックアップには含まれません。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="video-close">閉じる</button>
+      <button class="btn-primary" id="video-choose">動画を選択</button>
+    </div>`);
+  box.querySelector("#video-close").addEventListener("click", closeModal);
+  const input = box.querySelector("#form-video-file");
+  box.querySelector("#video-choose").addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) { toast("動画ファイルを選択してください"); return; }
+    if (file.size > 250 * 1024 * 1024) { toast("動画は250MB以下にしてください"); return; }
+    try {
+      box.querySelector("#video-modal-body").innerHTML = '<div class="chart-empty">保存中…</div>';
+      await saveExerciseVideo(exercise.id, file);
+      state.exerciseVideos[exercise.id] = { name: file.name, type: file.type, size: file.size, updatedAt: new Date().toISOString() };
+      save();
+      toast("フォーム動画を保存しました");
+      openExerciseVideo(exercise);
+    } catch (err) {
+      console.error(err);
+      toast("動画を保存できませんでした。端末の空き容量を確認してください");
+    }
+  });
+
+  try {
+    const blob = await getExerciseVideo(exercise.id);
+    const body = box.querySelector("#video-modal-body");
+    if (!body) return;
+    if (!blob) {
+      body.innerHTML = `<div class="video-empty"><span>🎬</span><p>フォーム動画は未登録です</p></div>`;
+      if (state.exerciseVideos[exercise.id]) {
+        delete state.exerciseVideos[exercise.id];
+        save();
+      }
+      return;
+    }
+    activeVideoUrl = URL.createObjectURL(blob);
+    body.innerHTML = `<video class="form-video" src="${activeVideoUrl}" controls playsinline preload="metadata"></video>
+      <button class="video-delete" id="video-delete">動画を削除</button>`;
+    body.querySelector("#video-delete").addEventListener("click", async () => {
+      if (!confirm("このフォーム動画を削除しますか？")) return;
+      await deleteExerciseVideo(exercise.id);
+      delete state.exerciseVideos[exercise.id];
+      save(); closeModal(); renderWorkout();
+      toast("フォーム動画を削除しました");
+    });
+  } catch (err) {
+    console.error(err);
+    box.querySelector("#video-modal-body").innerHTML = '<div class="chart-empty">動画を読み込めませんでした</div>';
+  }
 }
 
 $("#btn-workout-back").addEventListener("click", () => {
@@ -548,6 +750,11 @@ function renderHistory() {
       Object.keys(state.workouts).filter(k =>
         (state.workouts[k] || []).some(en => (ui.historyPart === "ALL" || entryPart(en) === ui.historyPart) && en.sets.length))
     );
+    if (ui.historyPart === "ALL" || ui.historyPart === "有酸素") {
+      Object.keys(state.runs || {}).forEach(k => {
+        if (runsForDay(k).length) markers.add(k);
+      });
+    }
     const m = ui.historyMonth;
     renderCalendar($("#history-calendar"), m, {
       light: true,
@@ -568,8 +775,9 @@ function renderHistoryDayDetail() {
   if (!ui.historySelected) return;
   const entries = (state.workouts[ui.historySelected] || [])
     .filter(en => ui.historyPart === "ALL" || entryPart(en) === ui.historyPart);
+  const runs = (ui.historyPart === "ALL" || ui.historyPart === "有酸素") ? runsForDay(ui.historySelected) : [];
   wrap.appendChild(el(`<h2 class="section-heading">${fmtDateJP(ui.historySelected)}</h2>`));
-  if (!entries.length) {
+  if (!entries.length && !runs.length) {
     wrap.appendChild(el(`<div class="empty-note">この日の記録はありません</div>`));
     return;
   }
@@ -582,6 +790,17 @@ function renderHistoryDayDetail() {
       ${en.sets.map((s, i) => `<div class="wo-set-line"><span class="idx">${i + 1}</span> ${Number(s.w) || 0} kg × ${Number(s.r) || 0} reps</div>`).join("")}
     </div>`);
     card.addEventListener("click", () => { ui.workoutDate = ui.historySelected; showView("workout"); });
+    wrap.appendChild(card);
+  }
+  for (const run of runs) {
+    const card = el(`<div class="wo-card run-history-card">
+      <div class="wo-card-head">
+        <span class="wo-card-name">🏃 ランニング ${round1(run.distance)} km</span>
+        <span class="wo-card-rm">${formatPace(run.paceSec)} /km</span>
+      </div>
+      <div class="wo-set-line">所要時間 ${formatDuration(run.durationSec)}${run.memo ? ` · ${esc(run.memo)}` : ""}</div>
+    </div>`);
+    card.addEventListener("click", () => { ui.runDate = ui.historySelected; showView("running"); });
     wrap.appendChild(card);
   }
 }
@@ -601,6 +820,16 @@ function renderHistoryGraphs() {
     bars.push({ label: `${sd.getMonth() + 1}/${sd.getDate()}`, value: v });
   }
   barChart($("#chart-volume"), bars, { unit: "kg" });
+
+  const runBars = [];
+  for (let i = 11; i >= 0; i--) {
+    const start = addDays(ws, -7 * i);
+    let distance = 0;
+    for (let d = 0; d < 7; d++) distance += runDistance(addDays(start, d));
+    const sd = parseKey(start);
+    runBars.push({ label: `${sd.getMonth() + 1}/${sd.getDate()}`, value: round1(distance) });
+  }
+  barChart($("#chart-run-distance"), runBars, { unit: "km", color: "#2e9e5b" });
 
   // 種目別 推定1RM
   const sel = $("#chart-exercise-select");
@@ -632,6 +861,103 @@ function renderRMChart(exerciseId) {
   }
   lineChart($("#chart-rm"), points.slice(-20), { unit: "kg" });
 }
+
+/* ================= ランニング ================= */
+function currentRunInput() {
+  const distance = Number($("#run-distance").value) || 0;
+  const hours = Math.max(0, Number($("#run-hours").value) || 0);
+  const minutes = Math.min(59, Math.max(0, Number($("#run-minutes").value) || 0));
+  const seconds = Math.min(59, Math.max(0, Number($("#run-seconds").value) || 0));
+  const durationSec = hours * 3600 + minutes * 60 + seconds;
+  return { distance, durationSec, paceSec: distance ? durationSec / distance : 0 };
+}
+
+function updateRunPacePreview() {
+  const { distance, durationSec, paceSec } = currentRunInput();
+  $("#run-pace-preview").textContent = distance > 0 && durationSec > 0
+    ? `平均ペース ${formatPace(paceSec)} /km`
+    : "平均ペース — /km";
+}
+
+function renderRunRow(key, run, { showDate = false } = {}) {
+  const row = el(`<div class="run-log-row">
+    <div class="run-log-main">
+      ${showDate ? `<span class="run-log-date">${fmtDateJP(key)}</span>` : ""}
+      <strong>${formatDistance(run.distance)} km</strong>
+      <span>${formatDuration(run.durationSec)} · ${formatPace(run.paceSec)} /km</span>
+      ${run.memo ? `<small>${esc(run.memo)}</small>` : ""}
+    </div>
+    <button class="del-btn" title="削除">✕</button>
+  </div>`);
+  row.querySelector(".del-btn").addEventListener("click", () => {
+    if (!confirm(`${fmtDateJP(key)} のランニング記録を削除しますか？`)) return;
+    const records = runsForDay(key);
+    const index = records.findIndex(item => item.id === run.id);
+    if (index >= 0) records.splice(index, 1);
+    if (!records.length) delete state.runs[key];
+    save(); renderRunning();
+    toast("ランニング記録を削除しました");
+  });
+  return row;
+}
+
+function renderRunning() {
+  $("#run-date-label").textContent = fmtDateJP(ui.runDate);
+  $("#run-distance").value = "";
+  $("#run-hours").value = "";
+  $("#run-minutes").value = "";
+  $("#run-seconds").value = "";
+  $("#run-memo").value = "";
+  updateRunPacePreview();
+
+  const week = weekStart(ui.runDate);
+  let weekDistance = 0;
+  for (let i = 0; i < 7; i++) weekDistance += runDistance(addDays(week, i));
+  const monthPrefix = ui.runDate.slice(0, 7);
+  const monthDistance = Object.keys(state.runs || {})
+    .filter(key => key.startsWith(monthPrefix))
+    .reduce((sum, key) => sum + runDistance(key), 0);
+  $("#run-stats").innerHTML = `
+    <div class="run-stat"><span>今週</span><strong>${round1(weekDistance)} km</strong></div>
+    <div class="run-stat"><span>今月</span><strong>${round1(monthDistance)} km</strong></div>`;
+
+  const dayList = $("#run-day-list");
+  dayList.innerHTML = "";
+  const dayRuns = runsForDay(ui.runDate);
+  if (!dayRuns.length) dayList.innerHTML = '<div class="chart-empty">この日の記録はありません</div>';
+  dayRuns.forEach(run => dayList.appendChild(renderRunRow(ui.runDate, run)));
+
+  const history = Object.keys(state.runs || {}).sort().reverse()
+    .flatMap(key => runsForDay(key).slice().reverse().map(run => ({ key, run })))
+    .filter(item => item.key !== ui.runDate || !dayRuns.some(run => run.id === item.run.id))
+    .slice(0, 20);
+  const historyList = $("#run-history-list");
+  historyList.innerHTML = "";
+  if (!history.length) historyList.innerHTML = '<div class="chart-empty">過去の記録はありません</div>';
+  history.forEach(({ key, run }) => historyList.appendChild(renderRunRow(key, run, { showDate: true })));
+}
+
+["#run-distance", "#run-hours", "#run-minutes", "#run-seconds"].forEach(selector => {
+  $(selector).addEventListener("input", updateRunPacePreview);
+  $(selector).addEventListener("focus", e => e.target.select());
+});
+$("#run-prev").addEventListener("click", () => { ui.runDate = addDays(ui.runDate, -1); renderRunning(); });
+$("#run-next").addEventListener("click", () => { ui.runDate = addDays(ui.runDate, 1); renderRunning(); });
+$("#btn-save-run").addEventListener("click", () => {
+  const { distance, durationSec, paceSec } = currentRunInput();
+  if (distance <= 0) { toast("距離を入力してください"); return; }
+  if (durationSec <= 0) { toast("所要時間を入力してください"); return; }
+  if (!state.runs[ui.runDate]) state.runs[ui.runDate] = [];
+  state.runs[ui.runDate].push({
+    id: uid(),
+    distance: Math.round(distance * 100) / 100,
+    durationSec,
+    paceSec,
+    memo: $("#run-memo").value.trim(),
+  });
+  save(); renderRunning();
+  toast("ランニングを記録しました");
+});
 
 /* ================= 食事 ================= */
 function renderMeals() {
@@ -897,10 +1223,11 @@ $("#import-file").addEventListener("change", async e => {
   e.target.value = "";
 });
 
-$("#btn-reset").addEventListener("click", () => {
+$("#btn-reset").addEventListener("click", async () => {
   if (!confirm("すべてのデータを削除します。よろしいですか？")) return;
   if (!confirm("本当に削除しますか？この操作は取り消せません。")) return;
   resetAll();
+  try { await clearExerciseVideos(); } catch (err) { console.error(err); }
   toast("データを削除しました");
   showView("home");
 });
