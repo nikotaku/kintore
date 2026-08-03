@@ -1,5 +1,5 @@
 // シンプルなオフラインキャッシュ（stale-while-revalidate）
-const CACHE = "kintore-memo-v1";
+const CACHE = "kintore-memo-v2";
 const ASSETS = [
   ".",
   "index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "js/data.js",
   "js/util.js",
   "js/charts.js",
+  "js/video-store.js",
   "manifest.json",
   "icons/icon.svg",
 ];

@@ -1,7 +1,7 @@
 {
-  "name": "筋トレ＆食事 MEMO",
+  "name": "筋トレ・ランニング＆食事 MEMO",
   "short_name": "筋トレMEMO",
-  "description": "筋トレと食事管理を一元管理する自分専用アプリ",
+  "description": "筋トレ・ランニング・食事管理を一元管理する自分専用アプリ",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#e8332a",

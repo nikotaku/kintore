@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#e8332a">
-<title>筋トレ＆食事 MEMO</title>
+<title>筋トレ・ランニング＆食事 MEMO</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -16,7 +16,7 @@
     <section class="view" id="view-home">
       <header class="app-header">
         <button class="icon-btn" id="btn-settings" aria-label="設定">⚙</button>
-        <h1>筋トレ＆食事 MEMO</h1>
+        <h1>筋トレ・ランニング MEMO</h1>
         <span class="header-spacer"></span>
       </header>
       <div class="hero">
@@ -55,13 +55,17 @@
       </div>
 
       <div class="home-body">
-        <div class="action-row">
+        <div class="action-row quick-actions">
           <button class="btn-primary" id="btn-add-training">＋ トレーニングを追加</button>
-          <button class="btn-outline" id="btn-rm-calc">🏋 RM 計算機</button>
+          <button class="btn-outline" id="btn-copy-workout">⏱ 前回メニュー</button>
+          <button class="btn-outline run" id="btn-quick-run">🏃 ランニング</button>
         </div>
 
         <h2 class="section-heading" id="home-date-heading"></h2>
         <div id="home-workout-list"></div>
+
+        <h2 class="section-heading">🏃 ランニング</h2>
+        <div class="card running-summary" id="home-running-summary"></div>
 
         <h2 class="section-heading">🍽 食事サマリ</h2>
         <div class="card meal-summary" id="home-meal-summary"></div>
@@ -90,6 +94,10 @@
           <select id="chart-exercise-select" class="input"></select>
           <div class="chart-box" id="chart-rm"></div>
         </div>
+        <div class="card">
+          <h3 class="card-title">週別 ランニング距離 (km)</h3>
+          <div class="chart-box" id="chart-run-distance"></div>
+        </div>
       </div>
     </section>
 
@@ -103,6 +111,42 @@
       </div>
       <div class="card" id="meal-totals"></div>
       <div id="meal-sections"></div>
+    </section>
+
+    <!-- ============ ランニング ============ -->
+    <section class="view" id="view-running" hidden>
+      <header class="app-header slim"><h1>ランニング</h1></header>
+      <div class="date-nav">
+        <button class="icon-btn dark" id="run-prev">‹</button>
+        <span id="run-date-label"></span>
+        <button class="icon-btn dark" id="run-next">›</button>
+      </div>
+      <div class="run-stats" id="run-stats"></div>
+      <div class="card">
+        <h3 class="card-title">ランニングを記録</h3>
+        <label class="field-label">距離 (km)
+          <input type="number" step="0.01" min="0" id="run-distance" class="input input-large" inputmode="decimal" placeholder="5.00">
+        </label>
+        <div class="duration-label">所要時間</div>
+        <div class="duration-inputs">
+          <label><input type="number" min="0" id="run-hours" class="input" inputmode="numeric" placeholder="0"><span>時間</span></label>
+          <label><input type="number" min="0" max="59" id="run-minutes" class="input" inputmode="numeric" placeholder="30"><span>分</span></label>
+          <label><input type="number" min="0" max="59" id="run-seconds" class="input" inputmode="numeric" placeholder="00"><span>秒</span></label>
+        </div>
+        <div class="pace-preview" id="run-pace-preview">平均ペース — /km</div>
+        <label class="field-label">メモ（任意）
+          <input type="text" id="run-memo" class="input" placeholder="コース、体調など">
+        </label>
+        <button class="btn-primary full" id="btn-save-run">記録する</button>
+      </div>
+      <div class="card">
+        <h3 class="card-title">この日の記録</h3>
+        <div id="run-day-list"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">最近の記録</h3>
+        <div id="run-history-list"></div>
+      </div>
     </section>
 
     <!-- ============ 体組成 ============ -->
@@ -156,8 +200,12 @@
           <button class="btn-danger full" id="btn-reset">🗑 全データを削除</button>
         </div>
       </div>
+      <div class="card">
+        <h3 class="card-title">便利機能</h3>
+        <button class="btn-outline full" id="btn-rm-calc">🏋 RM 計算機</button>
+      </div>
       <div class="card about">
-        <p>筋トレ＆食事 MEMO — 自分専用のトレーニング・食事一元管理アプリ。データはこの端末のブラウザ内にのみ保存されます。</p>
+        <p>筋トレ・ランニング＆食事 MEMO — 自分専用の運動・食事一元管理アプリ。データはこの端末のブラウザ内にのみ保存されます。</p>
       </div>
     </section>
 
@@ -191,6 +239,7 @@
   <nav class="bottom-nav">
     <button class="nav-item active" data-view="home"><span class="nav-icon">🏠</span>ホーム</button>
     <button class="nav-item" data-view="history"><span class="nav-icon">📅</span>履歴/分析</button>
+    <button class="nav-item" data-view="running"><span class="nav-icon">🏃</span>ラン</button>
     <button class="nav-item" data-view="meals"><span class="nav-icon">🍽</span>食事</button>
     <button class="nav-item" data-view="body"><span class="nav-icon">⚖️</span>体組成</button>
   </nav>

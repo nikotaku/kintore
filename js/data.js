@@ -25,6 +25,7 @@ export const DEFAULT_EXERCISES = [
   { id: "ex-crunch", name: "クランチ", part: "腹筋" },
   { id: "ex-legraise", name: "レッグレイズ", part: "腹筋" },
   { id: "ex-plank", name: "プランク", part: "腹筋" },
+  { id: "ex-running", name: "屋外ランニング", part: "有酸素" },
   { id: "ex-treadmill", name: "トレッドミル", part: "有酸素" },
   { id: "ex-bike", name: "エアロバイク", part: "有酸素" },
 ];
