@@ -1,4 +1,4 @@
-# 筋トレ＆食事 MEMO
+# 筋トレ・ランニング＆食事 MEMO
 
 筋トレの記録から食事管理（カロリー・PFC）まで一元管理できる、自分専用のWebアプリです。
 「筋トレMEMO」風の赤基調UIをベースに、食事管理・体組成管理を統合しています。
@@ -18,6 +18,16 @@
 - 部位・種目の追加/削除（カスタマイズ自由）
 - セットごとの重量・回数を記録、推定RMを自動計算
 - 日別の合計種目数・セット数・レップ数・負荷量を表示
+- 前回メニューをワンタップでコピー
+- 種目ごとに前回の重量・回数を一括反映
+- 重量入力後にEnterで回数、次セットへ移動
+- 種目ごとのフォーム動画を端末内に保存・再生
+
+### 🏃 ランニング記録
+- 距離・所要時間・メモを記録
+- 1kmあたりの平均ペースを自動計算
+- 今週・今月の合計距離を表示
+- 履歴カレンダーと週別距離グラフに反映
 
 ### 📅 履歴 / 分析
 - 部位フィルタ付きカレンダー表示
@@ -36,6 +46,7 @@
 
 ### ⚙️ その他
 - データはブラウザの localStorage に保存（完全ローカル・自分専用）
+- フォーム動画はブラウザの IndexedDB に保存（最大250MB/本）
 - JSONエクスポート / インポートでバックアップ・引っ越し可能
 - PWA対応（ホーム画面に追加してアプリのように使える・オフライン動作）
 
@@ -66,9 +77,13 @@ localStorage["kintore-memo-v1"] = {
   workouts:   { "YYYY-MM-DD": [{ exerciseId, name, part, sets: [{ w, r }] }] },
   meals:      { "YYYY-MM-DD": { breakfast: [{ name, grams, kcal, p, f, c }], ... } },
   body:       { "YYYY-MM-DD": { weight, fat } },
+  runs:       { "YYYY-MM-DD": [{ id, distance, durationSec, paceSec, memo }] },
+  exerciseVideos: { exerciseId: { name, type, size, updatedAt } },
   customFoods: [{ name, kcal, p, f, c, unit }],   // 100gあたり
   targets:    { kcal, p, f, c }
 }
 ```
+
+フォーム動画の本体は容量が大きいためJSONには含まれず、登録した端末内だけに保存されます。
 
 推定1RMは O'Conner 式（`重量 × (1 + 0.025 × 回数)`）で計算しています。
