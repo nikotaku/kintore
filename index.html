@@ -191,6 +191,55 @@
         </div>
         <button class="btn-primary full" id="btn-save-targets">保存</button>
       </div>
+      <div class="card advice-settings">
+        <div class="advice-title-row">
+          <h3 class="card-title">🌱 毎日のLINEアドバイス</h3>
+          <span class="cloud-badge" id="cloud-badge">未接続</span>
+        </div>
+        <p class="settings-note">トレーニング・食事・体組成の履歴と、入力した弱点をもとに毎日アドバイスします。</p>
+        <div class="goal-chips" aria-label="アドバイスの目標">
+          <span>🏛 国づくり</span>
+          <span>🤝 居心地のいいコミュニティ作り</span>
+          <span>🫀 健康の最適化</span>
+        </div>
+        <label class="field-label">今の弱点・改善したいこと
+          <textarea id="advice-weaknesses" class="input advice-textarea" maxlength="2000" placeholder="例：睡眠が不規則、背中が弱い、人に頼るのが苦手"></textarea>
+        </label>
+        <div class="advice-options">
+          <label class="field-label">LINEを送る時刻
+            <input type="time" id="advice-time" class="input" step="600">
+          </label>
+          <label class="switch-row">
+            <span>毎日送信</span>
+            <input type="checkbox" id="advice-enabled">
+            <span class="switch-ui" aria-hidden="true"></span>
+          </label>
+        </div>
+        <button class="btn-primary full" id="btn-save-advice">設定を保存</button>
+
+        <div class="cloud-divider"></div>
+        <div id="cloud-login">
+          <p class="cloud-heading">全力エステ予約通知用LINEと接続</p>
+          <label class="field-label">管理アカウント
+            <input type="email" id="cloud-email" class="input" autocomplete="username" placeholder="newkyasukan の管理メール">
+          </label>
+          <label class="field-label">管理パスワード
+            <input type="password" id="cloud-password" class="input" autocomplete="current-password" placeholder="newkyasukan と同じパスワード">
+          </label>
+          <button class="btn-outline full" id="btn-cloud-connect">接続して履歴を同期</button>
+        </div>
+        <div id="cloud-connected" hidden>
+          <p class="cloud-account" id="cloud-account"></p>
+          <div class="btn-col">
+            <button class="btn-outline full" id="btn-cloud-sync">今すぐ履歴を同期</button>
+            <button class="btn-outline full test-line" id="btn-test-advice">LINEへテスト送信</button>
+            <button class="btn-link" id="btn-cloud-disconnect">接続を解除</button>
+          </div>
+          <p class="last-advice" id="last-advice"></p>
+        </div>
+        <p class="cloud-status" id="cloud-status" role="status">LINE連携は未接続です</p>
+        <p class="privacy-note">LINEトークンはこのアプリには保存せず、newkyasukan のSupabase内だけで利用します。</p>
+      </div>
       <div class="card">
         <h3 class="card-title">データ管理</h3>
         <div class="btn-col">
@@ -205,7 +254,7 @@
         <button class="btn-outline full" id="btn-rm-calc">🏋 RM 計算機</button>
       </div>
       <div class="card about">
-        <p>筋トレ・ランニング＆食事 MEMO — 自分専用の運動・食事一元管理アプリ。データはこの端末のブラウザ内にのみ保存されます。</p>
+        <p>筋トレ・ランニング＆食事 MEMO — 通常データはこの端末に保存されます。LINE連携中は、毎日の助言に使うため暗号化通信で本人専用のクラウド領域にも同期されます。</p>
       </div>
     </section>
 
@@ -251,6 +300,8 @@
 
   <div class="toast" id="toast" hidden></div>
 
+  <script async src="js/vendor/supabase-2.75.0.js"
+    onload="window.dispatchEvent(new Event('supabase:ready'))"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

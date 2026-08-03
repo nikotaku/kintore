@@ -3,6 +3,14 @@ import { FOOD_DB, MEAL_TYPES, VOLUME_COMPARES } from "./data.js";
 import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc, el } from "./util.js";
 import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
+import {
+  connectCloud,
+  disconnectCloud,
+  getCloudStatus,
+  initCloudSync,
+  sendTestAdvice,
+  syncCloudNow,
+} from "./cloud-sync.js";
 
 /* ================= グローバルUI状態 ================= */
 const ui = {
@@ -1179,11 +1187,49 @@ $("#btn-save-body").addEventListener("click", () => {
 });
 
 /* ================= 設定 ================= */
+let cloudStatus = getCloudStatus();
+
+function updateCloudUI(nextStatus = getCloudStatus()) {
+  cloudStatus = nextStatus;
+  const badge = $("#cloud-badge");
+  const statusText = $("#cloud-status");
+  const login = $("#cloud-login");
+  const connected = $("#cloud-connected");
+  if (!badge || !statusText || !login || !connected) return;
+
+  badge.textContent = nextStatus.connected ? "接続中" : nextStatus.available ? "未接続" : "利用不可";
+  badge.classList.toggle("connected", nextStatus.connected);
+  badge.classList.toggle("error", !nextStatus.available);
+  statusText.textContent = nextStatus.message || "";
+  statusText.classList.toggle("error", /失敗|できません|正しくありません/.test(nextStatus.message || ""));
+  login.hidden = nextStatus.connected;
+  connected.hidden = !nextStatus.connected;
+  $("#cloud-account").textContent = nextStatus.connected
+    ? `${nextStatus.email} で接続中`
+    : "";
+
+  const lastAdvice = nextStatus.lastAdvice;
+  $("#last-advice").textContent = lastAdvice?.advice_date
+    ? `前回の自動送信：${lastAdvice.advice_date}（履歴分析）`
+    : "自動送信の履歴はまだありません";
+
+  ["#btn-cloud-connect", "#btn-cloud-sync", "#btn-test-advice", "#btn-cloud-disconnect"]
+    .forEach(selector => {
+      const button = $(selector);
+      if (button) button.disabled = !!nextStatus.busy || !nextStatus.available;
+    });
+}
+
 function renderSettings() {
   $("#target-kcal").value = state.targets.kcal;
   $("#target-p").value = state.targets.p;
   $("#target-f").value = state.targets.f;
   $("#target-c").value = state.targets.c;
+  $("#advice-weaknesses").value = state.advice?.weaknesses || "";
+  $("#advice-time").value = state.advice?.notificationTime || "08:00";
+  $("#advice-enabled").checked = state.advice?.notificationEnabled !== false;
+  $("#cloud-email").value = state.advice?.accountEmail || "";
+  updateCloudUI(cloudStatus);
 }
 
 $("#btn-settings-back").addEventListener("click", () => showView("home"));
@@ -1197,6 +1243,83 @@ $("#btn-save-targets").addEventListener("click", () => {
   };
   save();
   toast("目標を保存しました");
+});
+
+function saveAdviceForm() {
+  state.advice = {
+    ...(state.advice || {}),
+    goals: ["国づくり", "居心地のいいコミュニティ作り", "健康の最適化"],
+    weaknesses: $("#advice-weaknesses").value.trim(),
+    notificationEnabled: $("#advice-enabled").checked,
+    notificationTime: $("#advice-time").value || "08:00",
+    accountEmail: $("#cloud-email").value.trim(),
+  };
+  save();
+}
+
+$("#btn-save-advice").addEventListener("click", async () => {
+  saveAdviceForm();
+  try {
+    if (cloudStatus.connected) {
+      await syncCloudNow(state);
+      toast("設定を保存・同期しました");
+    } else {
+      toast("設定を端末に保存しました");
+    }
+  } catch (error) {
+    console.error(error);
+    toast("端末には保存しましたが、同期に失敗しました");
+  }
+});
+
+$("#btn-cloud-connect").addEventListener("click", async () => {
+  const password = $("#cloud-password").value;
+  saveAdviceForm();
+  try {
+    await connectCloud({
+      email: state.advice.accountEmail,
+      password,
+      state,
+    });
+    $("#cloud-password").value = "";
+    toast("LINEアドバイスを接続しました");
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "接続に失敗しました");
+  }
+});
+
+$("#btn-cloud-sync").addEventListener("click", async () => {
+  saveAdviceForm();
+  try {
+    await syncCloudNow(state);
+    toast("最新の履歴を同期しました");
+  } catch (error) {
+    console.error(error);
+    toast("同期に失敗しました");
+  }
+});
+
+$("#btn-test-advice").addEventListener("click", async () => {
+  if (!confirm("全力エステ予約通知用LINEへ、テストメッセージを1通送ります。よろしいですか？")) return;
+  saveAdviceForm();
+  try {
+    await sendTestAdvice(state);
+    toast("LINEへテスト送信しました");
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "テスト送信に失敗しました");
+  }
+});
+
+$("#btn-cloud-disconnect").addEventListener("click", async () => {
+  try {
+    await disconnectCloud();
+    toast("LINE連携を解除しました");
+  } catch (error) {
+    console.error(error);
+    toast("接続解除に失敗しました");
+  }
 });
 
 $("#btn-export").addEventListener("click", () => {
@@ -1236,5 +1359,12 @@ $("#btn-reset").addEventListener("click", async () => {
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+
+initCloudSync({
+  getState: () => state,
+  onStatus: updateCloudUI,
+}).catch(error => {
+  console.error("cloud sync initialization failed", error);
+});
 
 showView("home");
