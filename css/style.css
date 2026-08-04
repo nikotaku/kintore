@@ -429,6 +429,23 @@ body {
 .run-stat { background: var(--green); color: #fff; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
 .run-stat span { font-size: .75rem; opacity: .9; }
 .run-stat strong { font-size: 1.35rem; }
+.run-tip-card {
+  margin-top: 10px; border: 1px solid #b9dfc8;
+  background: linear-gradient(135deg, #f4fbf7, #fff);
+}
+.run-tip-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.run-tip-title { color: #176f3d; font-size: .82rem; font-weight: 800; }
+.run-tip-head button {
+  border: none; background: none; color: var(--green);
+  font-size: .75rem; font-weight: 700; cursor: pointer; padding: 4px;
+}
+.run-tip-content { display: flex; align-items: flex-start; gap: 10px; }
+.run-tip-badge {
+  flex: none; border-radius: 999px; background: var(--green); color: #fff;
+  padding: 4px 8px; font-size: .68rem; font-weight: 800;
+}
+.run-tip-badge.trivia { background: var(--amber); }
+.run-tip-content p { font-size: .9rem; line-height: 1.65; font-weight: 600; }
 .field-label { display: flex; flex-direction: column; gap: 5px; font-size: .8rem; color: var(--text-sub); margin-bottom: 12px; }
 .input-large { font-size: 1.35rem; font-weight: 800; color: var(--green); }
 .duration-label { font-size: .8rem; color: var(--text-sub); margin-bottom: 5px; }
