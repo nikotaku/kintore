@@ -23,6 +23,7 @@ const ui = {
   historySelected: null,
   mealDate: todayKey(),
   runDate: todayKey(),
+  runTipOffset: 0,
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
@@ -32,6 +33,25 @@ const ui = {
 const $ = sel => document.querySelector(sel);
 const MONTH_EN = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
+
+const RUNNING_TIPS = [
+  { kind: "フォーム", text: "目線は足元ではなく10〜20m先へ。頭が起きると上体も安定しやすい。" },
+  { kind: "豆知識", text: "平均ペースは信号や坂で変わる。単発の数字より、同じコースでの推移を見る。" },
+  { kind: "フォーム", text: "肩と手の力を抜き、腕は前へ振るより肘を後ろへ引く意識で。" },
+  { kind: "豆知識", text: "楽な日は会話できる強度が一つの目安。毎回速く走る必要はない。" },
+  { kind: "フォーム", text: "腰から折れず、足首から体全体をわずかに前へ傾ける。" },
+  { kind: "豆知識", text: "最初の5〜10分を抑えると、後半までフォームを保ちやすい。" },
+  { kind: "フォーム", text: "足を前へ伸ばしすぎず、体の真下に近い位置で着地する。" },
+  { kind: "豆知識", text: "暑さや向かい風では同じペースでも負荷が上がる。数字より体感を優先する。" },
+  { kind: "フォーム", text: "接地音が大きいときは、歩幅を少し狭めて静かな着地を試す。" },
+  { kind: "豆知識", text: "距離を増やす日は速さを控え、速さを上げる日は距離を控えると負荷を管理しやすい。" },
+  { kind: "フォーム", text: "疲れてきたら胸を軽く起こし、肘を後ろへ引いて姿勢を戻す。" },
+  { kind: "豆知識", text: "睡眠不足の日は、目標ペースより短時間の軽い走りへ切り替える選択もある。" },
+  { kind: "フォーム", text: "歩幅を無理に広げず、自然に足が回るリズムを優先する。" },
+  { kind: "豆知識", text: "痛みで走り方が変わるなら、その日は記録より中止を優先する。" },
+  { kind: "フォーム", text: "顎を上げすぎず、首から背中までを長く保つ。" },
+  { kind: "豆知識", text: "坂道では平地のペースを守らず、呼吸のきつさを一定に保つ。" },
+];
 
 /* ================= 共通ヘルパー ================= */
 function toast(msg) {
@@ -880,11 +900,60 @@ function currentRunInput() {
   return { distance, durationSec, paceSec: distance ? durationSec / distance : 0 };
 }
 
+function contextualRunningTip(run) {
+  const distance = Number(run?.distance) || 0;
+  const durationSec = Number(run?.durationSec) || 0;
+  const paceSec = Number(run?.paceSec) || 0;
+  if (distance >= 10 || durationSec >= 3600) {
+    return { kind: "豆知識", text: "長めの距離では前半を少し抑える。後半に姿勢と呼吸を保ちやすくなる。" };
+  }
+  if (paceSec > 0 && paceSec <= 330) {
+    return { kind: "フォーム", text: "速いペースほど肩と手に力が入りやすい。息を吐くたびに上半身をゆるめる。" };
+  }
+  if (paceSec >= 420) {
+    return { kind: "フォーム", text: "ゆっくり走る日は歩幅を欲張らず、会話できる呼吸と静かな着地を保つ。" };
+  }
+  if (paceSec > 0) {
+    return { kind: "フォーム", text: "足を前へ伸ばすより、体の真下に近い位置へ置く意識を優先する。" };
+  }
+  return null;
+}
+
+function runningTipSeed(key) {
+  return [...key].reduce((seed, char) => ((seed * 31) + char.charCodeAt(0)) >>> 0, 0);
+}
+
+function updateRunTip() {
+  const badge = $("#run-tip-badge");
+  const text = $("#run-tip-text");
+  if (!badge || !text) return;
+
+  const input = currentRunInput();
+  const hasCompleteInput = input.distance > 0 && input.durationSec > 0;
+  const dayRuns = runsForDay(ui.runDate);
+  const latestRun = dayRuns.length ? dayRuns[dayRuns.length - 1] : null;
+  const contextualTip = contextualRunningTip(hasCompleteInput ? input : latestRun);
+
+  let tip = null;
+  if (contextualTip && ui.runTipOffset === 0) {
+    tip = contextualTip;
+  } else {
+    const adjustment = contextualTip ? Math.max(0, ui.runTipOffset - 1) : ui.runTipOffset;
+    const index = (runningTipSeed(ui.runDate) + adjustment) % RUNNING_TIPS.length;
+    tip = RUNNING_TIPS[index];
+  }
+
+  badge.textContent = tip.kind;
+  badge.classList.toggle("trivia", tip.kind === "豆知識");
+  text.textContent = tip.text;
+}
+
 function updateRunPacePreview() {
   const { distance, durationSec, paceSec } = currentRunInput();
   $("#run-pace-preview").textContent = distance > 0 && durationSec > 0
     ? `平均ペース ${formatPace(paceSec)} /km`
     : "平均ペース — /km";
+  updateRunTip();
 }
 
 function renderRunRow(key, run, { showDate = false } = {}) {
@@ -949,8 +1018,20 @@ function renderRunning() {
   $(selector).addEventListener("input", updateRunPacePreview);
   $(selector).addEventListener("focus", e => e.target.select());
 });
-$("#run-prev").addEventListener("click", () => { ui.runDate = addDays(ui.runDate, -1); renderRunning(); });
-$("#run-next").addEventListener("click", () => { ui.runDate = addDays(ui.runDate, 1); renderRunning(); });
+$("#btn-next-run-tip").addEventListener("click", () => {
+  ui.runTipOffset += 1;
+  updateRunTip();
+});
+$("#run-prev").addEventListener("click", () => {
+  ui.runDate = addDays(ui.runDate, -1);
+  ui.runTipOffset = 0;
+  renderRunning();
+});
+$("#run-next").addEventListener("click", () => {
+  ui.runDate = addDays(ui.runDate, 1);
+  ui.runTipOffset = 0;
+  renderRunning();
+});
 $("#btn-save-run").addEventListener("click", () => {
   const { distance, durationSec, paceSec } = currentRunInput();
   if (distance <= 0) { toast("距離を入力してください"); return; }
@@ -963,7 +1044,9 @@ $("#btn-save-run").addEventListener("click", () => {
     paceSec,
     memo: $("#run-memo").value.trim(),
   });
-  save(); renderRunning();
+  save();
+  ui.runTipOffset = 0;
+  renderRunning();
   toast("ランニングを記録しました");
 });
 
