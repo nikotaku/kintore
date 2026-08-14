@@ -1,4 +1,12 @@
-import { state, save, resetAll, exportJSON, importJSON, uid } from "./store.js";
+import {
+  state,
+  save,
+  resetAll,
+  exportJSON,
+  importJSON,
+  replaceStateFromCloud,
+  uid,
+} from "./store.js";
 import { FOOD_DB, MEAL_TYPES, VOLUME_COMPARES } from "./data.js";
 import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc, el } from "./util.js";
 import { lineChart, barChart } from "./charts.js";
@@ -707,7 +715,7 @@ async function openExerciseVideo(exercise) {
       box.querySelector("#video-modal-body").innerHTML = '<div class="chart-empty">保存中…</div>';
       await saveExerciseVideo(exercise.id, file);
       state.exerciseVideos[exercise.id] = { name: file.name, type: file.type, size: file.size, updatedAt: new Date().toISOString() };
-      save();
+      save({ source: "device-only", touch: false });
       toast("フォーム動画を保存しました");
       openExerciseVideo(exercise);
     } catch (err) {
@@ -724,7 +732,7 @@ async function openExerciseVideo(exercise) {
       body.innerHTML = `<div class="video-empty"><span>🎬</span><p>フォーム動画は未登録です</p></div>`;
       if (state.exerciseVideos[exercise.id]) {
         delete state.exerciseVideos[exercise.id];
-        save();
+        save({ source: "device-only", touch: false });
       }
       return;
     }
@@ -735,7 +743,7 @@ async function openExerciseVideo(exercise) {
       if (!confirm("このフォーム動画を削除しますか？")) return;
       await deleteExerciseVideo(exercise.id);
       delete state.exerciseVideos[exercise.id];
-      save(); closeModal(); renderWorkout();
+      save({ source: "device-only", touch: false }); closeModal(); renderWorkout();
       toast("フォーム動画を削除しました");
     });
   } catch (err) {
@@ -1280,11 +1288,19 @@ function updateCloudUI(nextStatus = getCloudStatus()) {
   const connected = $("#cloud-connected");
   if (!badge || !statusText || !login || !connected) return;
 
-  badge.textContent = nextStatus.connected ? "接続中" : nextStatus.available ? "未接続" : "利用不可";
+  badge.textContent = nextStatus.phase === "conflict"
+    ? "要確認"
+    : nextStatus.phase === "pending"
+      ? "同期待ち"
+      : nextStatus.phase === "error"
+        ? "同期失敗"
+        : nextStatus.connected
+          ? nextStatus.busy ? "同期中" : "同期済み"
+          : nextStatus.available ? "未ログイン" : "利用不可";
   badge.classList.toggle("connected", nextStatus.connected);
-  badge.classList.toggle("error", !nextStatus.available);
+  badge.classList.toggle("error", !nextStatus.available || nextStatus.phase === "conflict");
   statusText.textContent = nextStatus.message || "";
-  statusText.classList.toggle("error", /失敗|できません|正しくありません/.test(nextStatus.message || ""));
+  statusText.classList.toggle("error", /失敗|できません|正しくありません|選択してください/.test(nextStatus.message || ""));
   login.hidden = nextStatus.connected;
   connected.hidden = !nextStatus.connected;
   $("#cloud-account").textContent = nextStatus.connected
@@ -1296,7 +1312,15 @@ function updateCloudUI(nextStatus = getCloudStatus()) {
     ? `前回の自動送信：${lastAdvice.advice_date}（履歴分析）`
     : "自動送信の履歴はまだありません";
 
-  ["#btn-cloud-connect", "#btn-cloud-sync", "#btn-test-advice", "#btn-cloud-disconnect"]
+  const lastSync = $("#last-sync");
+  if (lastSync) {
+    const synced = nextStatus.lastSyncedAt ? new Date(nextStatus.lastSyncedAt) : null;
+    lastSync.textContent = synced && !Number.isNaN(synced.getTime())
+      ? `最終同期：${synced.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}`
+      : "最終同期：まだありません";
+  }
+
+  ["#btn-cloud-connect", "#btn-cloud-sync", "#btn-test-advice", "#btn-cloud-disconnect", "#btn-save-advice"]
     .forEach(selector => {
       const button = $(selector);
       if (button) button.disabled = !!nextStatus.busy || !nextStatus.available;
@@ -1356,16 +1380,20 @@ $("#btn-save-advice").addEventListener("click", async () => {
 });
 
 $("#btn-cloud-connect").addEventListener("click", async () => {
+  const email = $("#cloud-email").value.trim();
   const password = $("#cloud-password").value;
-  saveAdviceForm();
   try {
-    await connectCloud({
-      email: state.advice.accountEmail,
-      password,
-      state,
-    });
+    const result = await connectCloud({ email, password });
+    state.advice = { ...(state.advice || {}), accountEmail: email };
+    save({ source: "device-only", touch: false });
     $("#cloud-password").value = "";
-    toast("LINEアドバイスを接続しました");
+    if (result.reconciliation?.action === "pulled") {
+      toast("クラウドの記録を復元しました");
+    } else if (result.reconciliation?.action === "conflict") {
+      toast("同期する記録を選択してください");
+    } else {
+      toast("ログインして自動保存を開始しました");
+    }
   } catch (error) {
     console.error(error);
     toast(error.message || "接続に失敗しました");
@@ -1398,10 +1426,10 @@ $("#btn-test-advice").addEventListener("click", async () => {
 $("#btn-cloud-disconnect").addEventListener("click", async () => {
   try {
     await disconnectCloud();
-    toast("LINE連携を解除しました");
+    toast("ログアウトしました");
   } catch (error) {
     console.error(error);
-    toast("接続解除に失敗しました");
+    toast("ログアウトに失敗しました");
   }
 });
 
@@ -1446,6 +1474,29 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 initCloudSync({
   getState: () => state,
   onStatus: updateCloudUI,
+  applyState: remoteState => {
+    replaceStateFromCloud(remoteState);
+    showView(ui.view);
+  },
+  onConflict: info => {
+    const describe = summary => summary
+      ? `筋トレ ${summary.workoutDays}日・食事 ${summary.mealDays}日・体組成 ${summary.bodyDays}日・ラン ${summary.runDays}日${summary.latestDate ? `（最終 ${summary.latestDate}）` : ""}`
+      : "保存データなし";
+
+    if (!info.remoteExists) {
+      return confirm(
+        `この端末には別アカウントの記録があります。\n\nこの端末：${describe(info.local)}\n\nこの記録を現在のアカウントへ保存しますか？`
+      ) ? "local" : "cancel";
+    }
+
+    const useCloud = confirm(
+      `この端末とクラウドの両方に別の記録があります。\n\nクラウド：${describe(info.remote)}\nこの端末：${describe(info.local)}\n\n「OK」：クラウドの記録をこの端末へ復元\n「キャンセル」：次の確認へ進む`
+    );
+    if (useCloud) return "cloud";
+    return confirm(
+      "この端末の記録でクラウドを置き換えますか？\nクラウド側の現在の記録は復旧用バックアップを作成してから置き換えます。"
+    ) ? "local" : "cancel";
+  },
 }).catch(error => {
   console.error("cloud sync initialization failed", error);
 });

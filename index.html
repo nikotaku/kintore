@@ -229,26 +229,28 @@
 
         <div class="cloud-divider"></div>
         <div id="cloud-login">
-          <p class="cloud-heading">全力エステ予約通知用LINEと接続</p>
-          <label class="field-label">管理アカウント
+          <p class="cloud-heading">ログイン・データ同期</p>
+          <p class="settings-note">同じアカウントでログインすると、最初にクラウドの記録を確認し、別端末でも自動復元します。以後の入力は自動保存されます。</p>
+          <label class="field-label">メールアドレス
             <input type="email" id="cloud-email" class="input" autocomplete="username" placeholder="newkyasukan の管理メール">
           </label>
-          <label class="field-label">管理パスワード
+          <label class="field-label">パスワード
             <input type="password" id="cloud-password" class="input" autocomplete="current-password" placeholder="newkyasukan と同じパスワード">
           </label>
-          <button class="btn-outline full" id="btn-cloud-connect">接続して履歴を同期</button>
+          <button class="btn-primary full" id="btn-cloud-connect">ログインして記録を復元・同期</button>
         </div>
         <div id="cloud-connected" hidden>
           <p class="cloud-account" id="cloud-account"></p>
           <div class="btn-col">
-            <button class="btn-outline full" id="btn-cloud-sync">今すぐ履歴を同期</button>
+            <button class="btn-outline full" id="btn-cloud-sync">今すぐクラウドと同期</button>
             <button class="btn-outline full test-line" id="btn-test-advice">LINEへテスト送信</button>
-            <button class="btn-link" id="btn-cloud-disconnect">接続を解除</button>
+            <button class="btn-link" id="btn-cloud-disconnect">ログアウト</button>
           </div>
+          <p class="last-advice" id="last-sync">最終同期：まだありません</p>
           <p class="last-advice" id="last-advice"></p>
         </div>
-        <p class="cloud-status" id="cloud-status" role="status">LINE連携は未接続です</p>
-        <p class="privacy-note">LINEトークンはこのアプリには保存せず、newkyasukan のSupabase内だけで利用します。</p>
+        <p class="cloud-status" id="cloud-status" role="status">ログインすると記録をクラウドへ保存できます</p>
+        <p class="privacy-note">記録は本人専用の領域へ保存されます。フォーム動画は容量が大きいため、登録した端末内だけに保存されます。</p>
       </div>
       <div class="card">
         <h3 class="card-title">データ管理</h3>
@@ -264,7 +266,7 @@
         <button class="btn-outline full" id="btn-rm-calc">🏋 RM 計算機</button>
       </div>
       <div class="card about">
-        <p>筋トレ・ランニング＆食事 MEMO — 通常データはこの端末に保存されます。LINE連携中は、毎日の助言に使うため暗号化通信で本人専用のクラウド領域にも同期されます。</p>
+        <p>筋トレ・ランニング＆食事 MEMO — ログイン前はこの端末に保存され、ログイン後は本人専用のクラウド領域にも自動同期されます。</p>
       </div>
     </section>
 
