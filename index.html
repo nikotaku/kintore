@@ -132,6 +132,14 @@
           <p id="run-tip-text">肩と手の力を抜いて、自然な腕振りを意識する。</p>
         </div>
       </aside>
+      <button type="button" class="run-guide-entry" id="btn-running-guide">
+        <span class="run-guide-entry-mark" aria-hidden="true">✓</span>
+        <span class="run-guide-entry-copy">
+          <strong>正しいフォーム・走る前の準備</strong>
+          <small>8〜10分で確認できる実践ガイド</small>
+        </span>
+        <span class="run-guide-entry-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="card">
         <h3 class="card-title">ランニングを記録</h3>
         <label class="field-label">距離 (km)
@@ -158,6 +166,197 @@
         <div id="run-history-list"></div>
       </div>
     </section>
+
+    <!-- ============ ランニング学習ガイド ============ -->
+    <div class="view" id="view-running-guide" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-running-guide-back" aria-label="ランニングへ戻る">‹</button>
+        <h1>走り方ガイド</h1>
+        <span class="header-spacer"></span>
+      </header>
+
+      <main class="running-guide">
+        <section class="running-guide-hero" aria-labelledby="running-guide-title">
+          <span class="running-guide-kicker">RUN BETTER</span>
+          <h2 id="running-guide-title" tabindex="-1">力まず、痛みなく、<br>楽に続けられる走り方へ。</h2>
+          <p>フォームに一つだけの正解はありません。まずは身体を固めず、接地を身体の近くに保つことから始めます。</p>
+          <div class="running-guide-meta" aria-label="ガイドの概要">
+            <span><b>6</b>つのフォーム</span>
+            <span><b>8〜10</b>分の準備</span>
+            <span><b>5</b>秒チェック</span>
+          </div>
+        </section>
+
+        <nav class="running-guide-tabs" aria-label="ページ内メニュー">
+          <a href="#running-form-basics">フォーム</a>
+          <a href="#running-warmup">走る前の準備</a>
+          <a href="#running-safety">安全確認</a>
+        </nav>
+
+        <section class="running-guide-section" id="running-form-basics" aria-labelledby="running-form-title">
+          <div class="running-guide-section-head">
+            <span>01</span>
+            <div>
+              <p>RUNNING FORM</p>
+              <h2 id="running-form-title">楽に走るための6ポイント</h2>
+            </div>
+          </div>
+
+          <figure class="running-form-figure">
+            <svg viewBox="0 0 360 220" role="img" aria-labelledby="running-form-figure-title running-form-figure-desc">
+              <title id="running-form-figure-title">ランニングフォームの横向き図</title>
+              <desc id="running-form-figure-desc">胸を起こして身体全体をわずかに前へ傾け、足を腰の近くへ着く姿勢を示します。</desc>
+              <defs>
+                <linearGradient id="run-guide-bg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#eaf8ef" />
+                  <stop offset="1" stop-color="#f8fcfa" />
+                </linearGradient>
+                <marker id="run-guide-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L6,3 z" fill="#2e9e5b" />
+                </marker>
+              </defs>
+              <rect x="1" y="1" width="358" height="218" rx="18" fill="url(#run-guide-bg)" stroke="#cfe9d9" />
+              <path d="M22 191 H338" stroke="#b7d7c3" stroke-width="3" stroke-linecap="round" />
+              <path d="M166 54 L150 107" stroke="#174b2c" stroke-width="11" stroke-linecap="round" />
+              <circle cx="171" cy="35" r="16" fill="#174b2c" />
+              <path d="M158 67 L126 92 L143 115" fill="none" stroke="#2e9e5b" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M158 68 L190 91 L170 111" fill="none" stroke="#174b2c" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M150 107 L132 145 L146 189" fill="none" stroke="#174b2c" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M150 107 L198 137 L178 179" fill="none" stroke="#2e9e5b" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M134 190 H158 M167 181 H190" stroke="#174b2c" stroke-width="8" stroke-linecap="round" />
+              <path d="M150 106 V191" stroke="#2e9e5b" stroke-width="2" stroke-dasharray="5 6" opacity=".65" />
+              <path d="M82 49 H140" stroke="#2e9e5b" stroke-width="2.5" marker-end="url(#run-guide-arrow)" />
+              <path d="M238 151 H167" stroke="#2e9e5b" stroke-width="2.5" marker-end="url(#run-guide-arrow)" />
+              <text x="27" y="43" fill="#176f3d" font-size="13" font-weight="700">目線は前へ</text>
+              <text x="240" y="146" fill="#176f3d" font-size="13" font-weight="700">腰の近くへ着く</text>
+            </svg>
+            <figcaption>胸を起こし、腰から折れずに身体全体をわずかに前へ。着地は腰の真下付近を目安にします。</figcaption>
+          </figure>
+
+          <ol class="running-form-cues">
+            <li>
+              <span class="running-form-cue-no">1</span>
+              <div><h3>頭を上げ、10〜15m先を見る</h3><p>足元を見続けず、首を自然な位置に保ちます。</p></div>
+            </li>
+            <li>
+              <span class="running-form-cue-no">2</span>
+              <div><h3>肩と手の力を抜く</h3><p>肩をすくめず、手の中に小さな紙を持つ程度の軽さにします。</p></div>
+            </li>
+            <li>
+              <span class="running-form-cue-no">3</span>
+              <div><h3>腕は身体の横で前後に振る</h3><p>肘を軽く曲げ、身体の前で大きく交差させないようにします。</p></div>
+            </li>
+            <li>
+              <span class="running-form-cue-no">4</span>
+              <div><h3>胸を起こし、身体全体で少し前へ</h3><p>背中を丸めず、腰だけを折らないようにします。前傾はわずかで十分です。</p></div>
+            </li>
+            <li>
+              <span class="running-form-cue-no">5</span>
+              <div><h3>歩幅を広げすぎない</h3><p>足を遠くへ投げ出さず、自然な小さめの歩幅で軽く回します。</p></div>
+            </li>
+            <li>
+              <span class="running-form-cue-no">6</span>
+              <div><h3>身体の真下付近へ静かに着く</h3><p>膝を軽く曲げて衝撃を受けます。かかと・足裏中央・前足部のどこから着くかは無理に変えません。</p></div>
+            </li>
+          </ol>
+
+          <aside class="running-guide-note">
+            <span aria-hidden="true">◎</span>
+            <div><strong>まず直すなら「歩幅」</strong><p>足音が大きい、身体が上下に跳ねる、毎歩ブレーキがかかる感覚があるときは、歩幅を少し狭めてみます。</p></div>
+          </aside>
+        </section>
+
+        <section class="running-guide-section" id="running-warmup" aria-labelledby="running-warmup-title">
+          <div class="running-guide-section-head">
+            <span>02</span>
+            <div>
+              <p>PRE-RUN WARM-UP</p>
+              <h2 id="running-warmup-title">走る前の8〜10分</h2>
+            </div>
+          </div>
+          <p class="running-guide-lead">順番は「身体を温める → 関節を動かす → 走る動きに近づける」です。痛みのない範囲で、止まらず滑らかに動きます。</p>
+
+          <ol class="running-warmup-flow">
+            <li>
+              <span class="running-warmup-time">5分</span>
+              <span class="running-warmup-icon" aria-hidden="true">🚶</span>
+              <div><h3>早歩き → 軽いジョグ</h3><p>最初はゆっくり。少し身体が温まり、会話できる速さまで上げます。</p></div>
+            </li>
+            <li>
+              <span class="running-warmup-time">各10回</span>
+              <span class="running-warmup-icon" aria-hidden="true">↻</span>
+              <div><h3>肩回し・腕振り</h3><p>肩を前後に回した後、肘を曲げて腕を身体の横で前後に振ります。</p></div>
+            </li>
+            <li>
+              <span class="running-warmup-time">左右10回</span>
+              <span class="running-warmup-icon" aria-hidden="true">↔</span>
+              <div><h3>レッグスイング</h3><p>壁に手を添え、脚を前後へ。続けて横方向にも振ります。反動を強くしません。</p></div>
+            </li>
+            <li>
+              <span class="running-warmup-time">30秒</span>
+              <span class="running-warmup-icon" aria-hidden="true">↑</span>
+              <div><h3>ニーリフト</h3><p>背筋を伸ばし、左右交互に膝を上げます。お腹を軽く締めて約30回。</p></div>
+            </li>
+            <li>
+              <span class="running-warmup-time">左右6回</span>
+              <span class="running-warmup-icon" aria-hidden="true">⇥</span>
+              <div><h3>ウォーキングランジ</h3><p>上体を起こし、膝とつま先を同じ方向へ。膝に痛みがあれば飛ばします。</p></div>
+            </li>
+            <li>
+              <span class="running-warmup-time">各20秒</span>
+              <span class="running-warmup-icon" aria-hidden="true">⚡</span>
+              <div><h3>もも上げ・かかと上げ</h3><p>軽いもも上げの後、かかとをお尻へ近づけます。速さより姿勢を優先します。</p></div>
+            </li>
+          </ol>
+
+          <aside class="running-guide-note running-guide-note-amber">
+            <span aria-hidden="true">!</span>
+            <div><strong>長く止まって伸ばすだけで終えない</strong><p>同じ筋肉を60秒以上伸ばし続けると、直後の最大筋力や瞬発力が一時的に下がる可能性があります。硬さが気になる部位は、身体を温めた後に20〜30秒、痛くない強さで伸ばし、その後に軽く動きます。柔軟性づくりは走った後か別の時間が基本です。</p></div>
+          </aside>
+
+          <div class="running-start-card">
+            <span>START</span>
+            <div><h3>最初の5分も準備運動</h3><p>普段より遅い速さで走り始めます。速い練習の前だけ、最後に15〜20秒の軽い加速走を2本加えます。</p></div>
+          </div>
+        </section>
+
+        <section class="running-guide-section" id="running-safety" aria-labelledby="running-safety-title">
+          <div class="running-guide-section-head">
+            <span>03</span>
+            <div>
+              <p>BEFORE YOU GO</p>
+              <h2 id="running-safety-title">走る前の5秒チェック</h2>
+            </div>
+          </div>
+
+          <ul class="running-checklist">
+            <li><span aria-hidden="true">✓</span>目線は前。顎を上げすぎていない</li>
+            <li><span aria-hidden="true">✓</span>肩・手・顔に余計な力が入っていない</li>
+            <li><span aria-hidden="true">✓</span>胸が起き、腰だけで前へ折れていない</li>
+            <li><span aria-hidden="true">✓</span>歩幅を無理に広げていない</li>
+            <li><span aria-hidden="true">✓</span>鋭い痛み、胸の圧迫感、めまいがない</li>
+          </ul>
+
+          <aside class="running-safety-card">
+            <strong>中止する目安</strong>
+            <p>鋭い痛み、走り方が変わるほどの痛み、胸の圧迫感、強い息苦しさ、めまいが出たら中止します。けが・持病がある場合や、医師から運動制限を受けている場合は、開始前に医療専門職へ確認してください。</p>
+          </aside>
+
+          <details class="running-guide-sources">
+            <summary>このガイドで確認した資料</summary>
+            <div>
+              <a href="https://pathway.jpnsport.go.jp/sports/column03.html" target="_blank" rel="noopener noreferrer">ハイパフォーマンススポーツセンター：ウォーミングアップ</a>
+              <a href="https://kennet.mhlw.go.jp/information/information/exercise/s-04-007.html" target="_blank" rel="noopener noreferrer">厚生労働省：ストレッチングの実際</a>
+              <a href="https://www.nhs.uk/live-well/exercise/how-to-warm-up-before-exercising/" target="_blank" rel="noopener noreferrer">NHS：運動前のウォームアップ</a>
+              <a href="https://www.hss.edu/health-library/move-better/proper-running-form" target="_blank" rel="noopener noreferrer">Hospital for Special Surgery：ランニングフォーム</a>
+              <a href="https://pubmed.ncbi.nlm.nih.gov/21659901/" target="_blank" rel="noopener noreferrer">系統的レビュー：静的ストレッチ時間と筋力</a>
+            </div>
+          </details>
+
+          <button type="button" class="btn-primary full running-guide-done" id="btn-running-guide-done">ランニング記録へ戻る</button>
+        </section>
+      </main>
+    </div>
 
     <!-- ============ 体組成 ============ -->
     <section class="view" id="view-body" hidden>
