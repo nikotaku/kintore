@@ -32,6 +32,7 @@ const ui = {
   mealDate: todayKey(),
   runDate: todayKey(),
   runTipOffset: 0,
+  runDrafts: {},              // 日付ごとの未保存入力（ガイド往復・再描画で保持）
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
@@ -914,6 +915,22 @@ function currentRunInput() {
   return { distance, durationSec, paceSec: distance ? durationSec / distance : 0 };
 }
 
+function currentRunDraft() {
+  return {
+    distance: $("#run-distance").value,
+    hours: $("#run-hours").value,
+    minutes: $("#run-minutes").value,
+    seconds: $("#run-seconds").value,
+    memo: $("#run-memo").value,
+  };
+}
+
+function rememberRunDraft() {
+  const draft = currentRunDraft();
+  if (Object.values(draft).some(value => value !== "")) ui.runDrafts[ui.runDate] = draft;
+  else delete ui.runDrafts[ui.runDate];
+}
+
 function contextualRunningTip(run) {
   const distance = Number(run?.distance) || 0;
   const durationSec = Number(run?.durationSec) || 0;
@@ -993,12 +1010,13 @@ function renderRunRow(key, run, { showDate = false } = {}) {
 }
 
 function renderRunning() {
+  const draft = ui.runDrafts[ui.runDate] || {};
   $("#run-date-label").textContent = fmtDateJP(ui.runDate);
-  $("#run-distance").value = "";
-  $("#run-hours").value = "";
-  $("#run-minutes").value = "";
-  $("#run-seconds").value = "";
-  $("#run-memo").value = "";
+  $("#run-distance").value = draft.distance || "";
+  $("#run-hours").value = draft.hours || "";
+  $("#run-minutes").value = draft.minutes || "";
+  $("#run-seconds").value = draft.seconds || "";
+  $("#run-memo").value = draft.memo || "";
   updateRunPacePreview();
 
   const week = weekStart(ui.runDate);
@@ -1029,14 +1047,21 @@ function renderRunning() {
 }
 
 ["#run-distance", "#run-hours", "#run-minutes", "#run-seconds"].forEach(selector => {
-  $(selector).addEventListener("input", updateRunPacePreview);
+  $(selector).addEventListener("input", () => {
+    rememberRunDraft();
+    updateRunPacePreview();
+  });
   $(selector).addEventListener("focus", e => e.target.select());
 });
+$("#run-memo").addEventListener("input", rememberRunDraft);
 $("#btn-next-run-tip").addEventListener("click", () => {
   ui.runTipOffset += 1;
   updateRunTip();
 });
-$("#btn-running-guide").addEventListener("click", () => showViewAndFocus("running-guide", "#running-guide-title"));
+$("#btn-running-guide").addEventListener("click", () => {
+  rememberRunDraft();
+  showViewAndFocus("running-guide", "#running-guide-title");
+});
 $("#btn-running-guide-back").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
 $("#btn-running-guide-done").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
 $("#run-prev").addEventListener("click", () => {
@@ -1062,6 +1087,7 @@ $("#btn-save-run").addEventListener("click", () => {
     memo: $("#run-memo").value.trim(),
   });
   save();
+  delete ui.runDrafts[ui.runDate];
   ui.runTipOffset = 0;
   renderRunning();
   toast("ランニングを記録しました");
