@@ -20,7 +20,7 @@ test("running screen links to a complete learning guide", () => {
 });
 
 test("guide open and back controls are wired without adding another bottom tab", () => {
-  assert.match(app, /btn-running-guide"\)\.addEventListener\("click", \(\) => showViewAndFocus\("running-guide", "#running-guide-title"\)\)/);
+  assert.match(app, /btn-running-guide"\)\.addEventListener\("click", \(\) => \{[\s\S]*?showViewAndFocus\("running-guide", "#running-guide-title"\);[\s\S]*?\}\)/);
   assert.match(app, /btn-running-guide-back"\)\.addEventListener\("click", \(\) => showViewAndFocus\("running", "#btn-running-guide"\)\)/);
   assert.match(app, /btn-running-guide-done"\)\.addEventListener\("click", \(\) => showViewAndFocus\("running", "#btn-running-guide"\)\)/);
   assert.match(app, /name === "running-guide" \? "running" : name/);
@@ -41,4 +41,19 @@ test("service worker cache is bumped for the new HTML, CSS and behavior", () => 
   for (const asset of ["index.html", "css/style.css", "js/app.js"]) {
     assert.ok(serviceWorker.includes(`"${asset}"`), `${asset} should be precached`);
   }
+  assert.match(serviceWorker, /k\.startsWith\("kintore-memo-"\)/);
+  assert.doesNotMatch(serviceWorker, /client\.navigate/);
+});
+
+test("unfinished running input survives guide navigation and rerenders", () => {
+  assert.match(app, /runDrafts: \{\}/);
+  assert.match(app, /function rememberRunDraft\(\)/);
+  assert.match(app, /const draft = ui\.runDrafts\[ui\.runDate\] \|\| \{\}/);
+  assert.match(app, /rememberRunDraft\(\);\s*showViewAndFocus\("running-guide"/);
+  assert.match(app, /delete ui\.runDrafts\[ui\.runDate\]/);
+});
+
+test("safety guidance includes emergency escalation", () => {
+  assert.match(html, /緊急性が高い症状は119/);
+  assert.match(html, /#7119/);
 });

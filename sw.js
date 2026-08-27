@@ -23,14 +23,10 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys
+        .filter(k => k.startsWith("kintore-memo-") && k !== CACHE)
+        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
-      // An already-open page can still be running the previous upload-only code.
-      // Reload controlled windows once so the pull-first client takes over immediately.
-      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
-      .then(clients => Promise.all(clients.map(client =>
-        Promise.resolve(client.navigate(client.url)).catch(() => null)
-      )))
   );
 });
 
