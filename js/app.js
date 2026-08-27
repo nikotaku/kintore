@@ -197,8 +197,9 @@ function mealDayTotals(key) {
 function showView(name) {
   ui.view = name;
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
+  const activeNav = name === "running-guide" ? "running" : name;
   document.querySelectorAll(".nav-item").forEach(b => {
-    b.classList.toggle("active", b.dataset.view === name);
+    b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
   const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout };
@@ -208,6 +209,11 @@ function showView(name) {
 document.querySelectorAll(".nav-item").forEach(btn => {
   btn.addEventListener("click", () => showView(btn.dataset.view));
 });
+
+function showViewAndFocus(name, selector) {
+  showView(name);
+  requestAnimationFrame(() => $(selector)?.focus({ preventScroll: true }));
+}
 
 /* ================= カレンダー共通描画 ================= */
 function renderCalendar(container, monthDate, { light = false, markers = new Set(), selectedKey = null, onSelect, onMonthChange, title } = {}) {
@@ -1030,6 +1036,9 @@ $("#btn-next-run-tip").addEventListener("click", () => {
   ui.runTipOffset += 1;
   updateRunTip();
 });
+$("#btn-running-guide").addEventListener("click", () => showViewAndFocus("running-guide", "#running-guide-title"));
+$("#btn-running-guide-back").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
+$("#btn-running-guide-done").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
 $("#run-prev").addEventListener("click", () => {
   ui.runDate = addDays(ui.runDate, -1);
   ui.runTipOffset = 0;
