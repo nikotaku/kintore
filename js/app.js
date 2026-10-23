@@ -11,6 +11,30 @@ import { FOOD_DB, MEAL_TYPES, VOLUME_COMPARES } from "./data.js";
 import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc, el } from "./util.js";
 import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
+import { buildDaySummary, formatShareText, drawShareCard, canvasToFile, shareUrls } from "./share.js";
+import {
+  GroupError,
+  GROUP_POST_WINDOW_DAYS,
+  INVITE_CODE_RE,
+  callGroupRpc,
+  checkinLines,
+  checkinPayload,
+  decodeTransferCode,
+  detectRemovalSupport,
+  encodeTransferCode,
+  hasCheckinContent,
+  inviteText,
+  inviteUrl,
+  loadMemberships,
+  membershipFromResponse,
+  newMemberSecret,
+  normalizeInviteCode,
+  parseJoinHash,
+  reactionCounts,
+  removeMembership,
+  saveMemberships,
+  upsertMembership,
+} from "./group.js";
 import {
   connectCloud,
   disconnectCloud,
@@ -38,6 +62,8 @@ const ui = {
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
   pickerEdit: false,
+  groupMemberId: null,        // 表示中のグループ（この端末の参加情報のID）
+  groupWeek: null,            // グループ画面で表示中の週（月曜のキー）
 };
 
 const $ = sel => document.querySelector(sel);
@@ -199,6 +225,7 @@ function mealDayTotals(key) {
 function showView(name) {
   // 非表示にした動画が裏で再生され続けないよう、ストレッチ画面を離れたら破棄する
   if (ui.view === "stretch" && name !== "stretch") releaseStretchVideos();
+  if (name !== "group") groupRenderToken += 1;
   ui.view = name;
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
   const activeNav = name === "running-guide" ? "running" : name;
@@ -206,7 +233,7 @@ function showView(name) {
     b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup };
   renderers[name]?.();
 }
 
@@ -300,6 +327,9 @@ function renderHomeEntry() {
   const exerciseCount = (state.workouts[key] || []).length;
   $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "種目・重量を記録";
   $("#btn-entry-weight").classList.toggle("done", exerciseCount > 0);
+
+  const groupCount = loadMemberships().length;
+  $("#entry-group-status").textContent = groupCount ? `${groupCount}つのグループに参加中` : "友だちと毎日の記録を見せ合う";
 }
 
 function renderHome() {
@@ -391,6 +421,7 @@ function renderHome() {
     ui.runDate = ui.selectedDate;
     showView("running");
   });
+  $("#btn-share-day").disabled = !buildDaySummary(state, ui.selectedDate).hasContent;
 
   // 食事サマリ
   const tot = mealDayTotals(ui.selectedDate);
@@ -1011,6 +1042,712 @@ $("#stretch-video-file").addEventListener("change", async e => {
 $("#btn-add-stretch").addEventListener("click", openStretchRegister);
 $("#btn-stretch-back").addEventListener("click", () => showView("home"));
 
+/* ================= SNSシェア ================= */
+function openExternal(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openShareSheet(key) {
+  const summary = buildDaySummary(state, key);
+  if (!summary.hasContent) { toast("シェアできる記録がありません（重量・回数か距離を入力してください）"); return; }
+  const canNativeShare = typeof navigator.share === "function";
+  const box = openModal(`
+    <h3>📤 記録をシェア</h3>
+    <div class="share-preview"><canvas id="share-canvas" role="img" aria-label="${esc(summary.dateLabel)} の記録画像"></canvas></div>
+    <label class="field-label">投稿テキスト（編集できます）
+      <textarea id="share-text" class="input share-text" rows="7"></textarea>
+    </label>
+    ${canNativeShare ? '<button type="button" class="btn-primary full share-native" id="share-native" disabled>📱 アプリを選んでシェア</button>' : ""}
+    <div class="share-grid">
+      <button type="button" class="share-sns x" id="share-x">𝕏 で投稿</button>
+      <button type="button" class="share-sns line" id="share-line">LINEで送る</button>
+      <button type="button" class="share-sns" id="share-save">画像を保存</button>
+      <button type="button" class="share-sns" id="share-copy">テキストをコピー</button>
+    </div>
+    <p class="hint">画像とテキストはこの端末内で作成され、投稿するまでどこにも送信されません。Instagramは「アプリを選んでシェア」か、画像を保存してから投稿してください。</p>
+    <div class="modal-actions"><button type="button" class="btn-ghost" id="share-close">閉じる</button></div>`);
+  const textArea = box.querySelector("#share-text");
+  textArea.value = formatShareText(summary);
+  const filename = `kintore-${key}.png`;
+  const canvas = drawShareCard(box.querySelector("#share-canvas"), summary);
+  // iOS Safari はタップ直後でないと共有シートを開けないため、画像は先に作っておく
+  let file = null;
+  const filePromise = canvasToFile(canvas, filename)
+    .then(created => { file = created; return created; })
+    .catch(err => { console.error(err); return null; });
+  const nativeButton = box.querySelector("#share-native");
+  filePromise.then(() => { if (nativeButton) nativeButton.disabled = false; });
+
+  box.querySelector("#share-close").addEventListener("click", closeModal);
+  nativeButton?.addEventListener("click", async () => {
+    const text = textArea.value;
+    const data = file && navigator.canShare?.({ files: [file] }) ? { files: [file], text } : { text };
+    try {
+      await navigator.share(data);
+    } catch (err) {
+      if (err.name !== "AbortError") { console.error(err); toast("シェアできませんでした"); }
+    }
+  });
+  box.querySelector("#share-x").addEventListener("click", () => openExternal(shareUrls(textArea.value).x));
+  box.querySelector("#share-line").addEventListener("click", () => openExternal(shareUrls(textArea.value).line));
+  box.querySelector("#share-save").addEventListener("click", async () => {
+    const image = file || await filePromise;
+    if (!image) { toast("画像を作成できませんでした"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(image);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  box.querySelector("#share-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(textArea.value);
+      toast("テキストをコピーしました");
+    } catch {
+      textArea.select();
+      toast(document.execCommand("copy") ? "テキストをコピーしました" : "コピーできませんでした。テキストを長押ししてコピーしてください");
+    }
+  });
+}
+
+$("#btn-share-day").addEventListener("click", () => openShareSheet(ui.selectedDate));
+$("#btn-workout-share").addEventListener("click", () => openShareSheet(ui.workoutDate));
+$("#btn-run-share").addEventListener("click", () => openShareSheet(ui.runDate));
+
+/* ================= グループ（ログイン不要・招待コード制） ================= */
+let groupRenderToken = 0;
+let groupFeed = null;
+// 取り消し系のサーバー関数があるか（null は未確認）。無い間はリアクション・取り消し・退出などを出さない
+let groupRemovalSupported = null;
+
+async function ensureRemovalSupport() {
+  if (groupRemovalSupported !== true) {
+    const detected = await detectRemovalSupport();
+    if (detected !== null) groupRemovalSupported = detected;
+  }
+  return groupRemovalSupported === true;
+}
+
+function currentMembership() {
+  return loadMemberships().find(m => m.memberId === ui.groupMemberId) || null;
+}
+
+function groupErrorMessage(err) {
+  if (!(err instanceof GroupError)) console.error(err);
+  return err instanceof GroupError ? err.message : "グループの処理に失敗しました";
+}
+
+function lastDisplayName() {
+  const list = loadMemberships();
+  return list.length ? list[list.length - 1].displayName : "";
+}
+
+function openGroup(memberId) {
+  ui.groupMemberId = memberId;
+  ui.groupWeek = weekStart(ui.selectedDate);
+  groupFeed = null;
+  showView("group");
+}
+
+function forgetMembership(memberId) {
+  saveMemberships(removeMembership(loadMemberships(), memberId));
+}
+
+function renderGroups() {
+  const list = $("#group-list");
+  const memberships = loadMemberships();
+  if (!memberships.length) {
+    list.innerHTML = `<div class="empty-note group-empty">まだグループに参加していません。<br>グループを作って友だちを招待するか、招待コードで参加しましょう。</div>`;
+    return;
+  }
+  list.innerHTML = "";
+  const today = todayKey();
+  memberships.forEach(m => {
+    const card = el(`<button type="button" class="group-card">
+      <span class="group-card-icon" aria-hidden="true">👥</span>
+      <span class="group-card-copy">
+        <strong>${esc(m.groupName)}</strong>
+        <small>${esc(m.displayName)} として参加 · <span class="group-card-status">確認中…</span></small>
+      </span>
+      <span class="group-card-arrow" aria-hidden="true">›</span>
+    </button>`);
+    card.addEventListener("click", () => openGroup(m.memberId));
+    list.appendChild(card);
+    const status = card.querySelector(".group-card-status");
+    callGroupRpc("kintore_group_feed", { p_member_id: m.memberId, p_secret: m.secret, p_from: today, p_to: today })
+      .then(feed => {
+        const posted = new Set(feed.checkins.map(c => c.member_id)).size;
+        status.textContent = `今日 ${posted}/${feed.members.length}人が投稿`;
+        if (feed.group.name !== m.groupName) {
+          saveMemberships(loadMemberships().map(x => (x.memberId === m.memberId ? { ...x, groupName: feed.group.name } : x)));
+          card.querySelector("strong").textContent = feed.group.name;
+        }
+      })
+      .catch(err => {
+        status.textContent = err.code === "KINTORE_GROUP_AUTH" ? "参加情報が無効です" : "オフライン";
+      });
+  });
+}
+
+async function renderGroup() {
+  const membership = currentMembership();
+  if (!membership) { showView("groups"); return; }
+  $("#group-title").textContent = membership.groupName;
+  const body = $("#group-body");
+  const token = ++groupRenderToken;
+  if (!groupFeed || groupFeed.me.member_id !== membership.memberId) {
+    body.innerHTML = '<div class="chart-empty">読み込み中…</div>';
+  }
+  try {
+    const [feed] = await Promise.all([
+      callGroupRpc("kintore_group_feed", {
+        p_member_id: membership.memberId,
+        p_secret: membership.secret,
+        p_from: ui.groupWeek,
+        p_to: addDays(ui.groupWeek, 6),
+      }),
+      ensureRemovalSupport(),
+    ]);
+    if (token !== groupRenderToken) return;
+    groupFeed = feed;
+    if (feed.group.name !== membership.groupName || feed.me.display_name !== membership.displayName) {
+      saveMemberships(loadMemberships().map(m => (m.memberId === membership.memberId
+        ? { ...m, groupName: feed.group.name, displayName: feed.me.display_name } : m)));
+      $("#group-title").textContent = feed.group.name;
+    }
+    drawGroup(feed);
+  } catch (err) {
+    if (token !== groupRenderToken) return;
+    groupFeed = null;
+    if (err.code === "KINTORE_GROUP_AUTH") {
+      body.innerHTML = `<div class="empty-note group-empty">${esc(err.message)}<br><button type="button" class="btn-outline small" id="btn-group-forget">この端末の一覧から外す</button></div>`;
+      $("#btn-group-forget").addEventListener("click", () => {
+        forgetMembership(membership.memberId);
+        toast("一覧から外しました");
+        showView("groups");
+      });
+      return;
+    }
+    body.innerHTML = `<div class="empty-note group-empty">${esc(groupErrorMessage(err))}<br><button type="button" class="btn-outline small" id="btn-group-retry">再読み込み</button></div>`;
+    $("#btn-group-retry").addEventListener("click", renderGroup);
+  }
+}
+
+function drawGroup(feed) {
+  const body = $("#group-body");
+  body.innerHTML = "";
+  const days = Array.from({ length: 7 }, (_, i) => addDays(ui.groupWeek, i));
+  if (days.includes(ui.selectedDate)) {
+    body.appendChild(groupCheckinCard(feed));
+  } else {
+    const back = el(`<button type="button" class="btn-link group-back-week">${esc(fmtDateJP(ui.selectedDate))} の週に戻って投稿する</button>`);
+    back.addEventListener("click", () => { ui.groupWeek = weekStart(ui.selectedDate); renderGroup(); });
+    body.appendChild(back);
+  }
+  body.appendChild(groupWeekCard(feed, days));
+
+  const section = el(`<section class="group-feed"><h2 class="section-heading">この週の投稿</h2></section>`);
+  if (!feed.checkins.length) {
+    section.appendChild(el(`<div class="empty-note">まだ投稿がありません。最初の一人になろう💪</div>`));
+  }
+  feed.checkins.forEach(checkin => section.appendChild(groupPostCard(checkin, feed)));
+  body.appendChild(section);
+}
+
+function groupCheckinCard(feed) {
+  const key = ui.selectedDate;
+  const mine = feed.checkins.find(c => c.member_id === feed.me.member_id && c.day === key);
+  const summary = buildDaySummary(state, key);
+  const outOfWindow = key > todayKey() || key < addDays(todayKey(), -GROUP_POST_WINDOW_DAYS);
+  const card = el(`<section class="card group-checkin">
+    <div class="group-checkin-head">
+      <h2>${esc(fmtDateJP(key))} の記録を投稿</h2>
+      ${mine ? '<span class="group-posted">投稿済み</span>' : ""}
+    </div>
+    <ul class="group-lines" id="group-checkin-preview"></ul>
+    <label class="group-stretch-toggle"><input type="checkbox" id="group-stretch"> 🧘 ストレッチもした</label>
+    <input type="text" id="group-note" class="input" maxlength="100" placeholder="ひとこと（任意） 例: 脚の日！">
+    <div class="group-checkin-actions">
+      <button type="button" class="btn-primary" id="btn-group-post">${mine ? "投稿を更新" : "グループに投稿"}</button>
+      ${mine && groupRemovalSupported ? '<button type="button" class="btn-ghost" id="btn-group-unpost">取り消す</button>' : ""}
+    </div>
+    <p class="group-share-note">${outOfWindow ? "投稿できるのは今日から7日前までの記録です。ホームで日付を選び直してください。" : "共有されるのは種目・重量・回数・ランの要約と一言だけです。"}</p>
+  </section>`);
+  const stretchInput = card.querySelector("#group-stretch");
+  const noteInput = card.querySelector("#group-note");
+  const preview = card.querySelector("#group-checkin-preview");
+  const postButton = card.querySelector("#btn-group-post");
+  stretchInput.checked = mine?.summary?.stretch === true;
+  noteInput.value = mine?.note || "";
+  postButton.disabled = outOfWindow;
+
+  const updatePreview = () => {
+    const lines = checkinLines(checkinPayload(summary, { stretch: stretchInput.checked }));
+    preview.innerHTML = lines.length
+      ? lines.map(line => `<li class="${line.kind}">${esc(line.text)}</li>`).join("")
+      : '<li class="empty">この日の記録はまだありません（ストレッチや一言だけでも投稿できます）</li>';
+  };
+  stretchInput.addEventListener("change", updatePreview);
+  updatePreview();
+
+  postButton.addEventListener("click", async () => {
+    const membership = currentMembership();
+    if (!membership) return;
+    const payload = checkinPayload(summary, { stretch: stretchInput.checked });
+    const note = noteInput.value.trim();
+    if (!hasCheckinContent(payload, note)) { toast("投稿する記録がありません"); return; }
+    postButton.disabled = true;
+    try {
+      await callGroupRpc("kintore_group_checkin", {
+        p_member_id: membership.memberId, p_secret: membership.secret, p_day: key, p_summary: payload, p_note: note,
+      });
+      toast(mine ? "投稿を更新しました" : "グループに投稿しました");
+      renderGroup();
+    } catch (err) {
+      postButton.disabled = false;
+      toast(groupErrorMessage(err));
+    }
+  });
+  card.querySelector("#btn-group-unpost")?.addEventListener("click", async () => {
+    const membership = currentMembership();
+    if (!membership || !confirm("この日の投稿を取り消しますか？\nリアクションとコメントも消えます。")) return;
+    try {
+      await callGroupRpc("kintore_group_checkin_delete", { p_member_id: membership.memberId, p_secret: membership.secret, p_day: key });
+      toast("投稿を取り消しました");
+      renderGroup();
+    } catch (err) {
+      toast(groupErrorMessage(err));
+    }
+  });
+  return card;
+}
+
+function groupWeekCard(feed, days) {
+  const posted = new Set(feed.checkins.map(c => `${c.member_id}|${c.day}`));
+  const today = todayKey();
+  const label = key => { const d = parseKey(key); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const weekday = key => "日月火水木金土"[parseKey(key).getDay()];
+  const isCurrentWeek = ui.groupWeek >= weekStart(today);
+  const card = el(`<section class="card group-week">
+    <div class="group-week-head">
+      <button type="button" class="icon-btn dark" id="group-week-prev" aria-label="前の週">‹</button>
+      <h2>${label(days[0])}〜${label(days[6])}</h2>
+      <button type="button" class="icon-btn dark" id="group-week-next" aria-label="次の週" ${isCurrentWeek ? "disabled" : ""}>›</button>
+    </div>
+    <div class="group-grid" role="table" aria-label="メンバーごとの投稿状況">
+      <div class="group-grid-row head" role="row">
+        <span role="columnheader"></span>
+        ${days.map(key => `<span role="columnheader" class="${key === today ? "today" : ""}">${weekday(key)}<small>${parseKey(key).getDate()}</small></span>`).join("")}
+      </div>
+      ${feed.members.map(m => {
+        const count = days.filter(key => posted.has(`${m.id}|${key}`)).length;
+        return `<div class="group-grid-row" role="row">
+          <span role="rowheader" class="group-grid-name">${esc(m.display_name)}${m.id === feed.me.member_id ? "<small>あなた</small>" : ""}<b>${count}/7</b></span>
+          ${days.map(key => `<span role="cell" class="group-dot${posted.has(`${m.id}|${key}`) ? " on" : ""}${key === today ? " today" : ""}" aria-label="${posted.has(`${m.id}|${key}`) ? "投稿あり" : "投稿なし"}"></span>`).join("")}
+        </div>`;
+      }).join("")}
+    </div>
+  </section>`);
+  card.querySelector("#group-week-prev").addEventListener("click", () => { ui.groupWeek = addDays(ui.groupWeek, -7); renderGroup(); });
+  card.querySelector("#group-week-next").addEventListener("click", () => { ui.groupWeek = addDays(ui.groupWeek, 7); renderGroup(); });
+  return card;
+}
+
+function groupPostCard(checkin, feed) {
+  const members = new Map(feed.members.map(m => [m.id, m]));
+  const myId = feed.me.member_id;
+  const isOwner = feed.me.role === "owner";
+  const author = members.get(checkin.member_id)?.display_name || "メンバー";
+  const lines = checkinLines(checkin.summary);
+  const card = el(`<article class="group-post">
+    <header class="group-post-head">
+      <span class="group-avatar" aria-hidden="true">${esc([...author][0] || "?")}</span>
+      <div>
+        <strong>${esc(author)}${checkin.member_id === myId ? "<small>（あなた）</small>" : ""}</strong>
+        <small>${esc(fmtDateJP(checkin.day))}</small>
+      </div>
+    </header>
+    ${checkin.note ? `<p class="group-post-note">${esc(checkin.note)}</p>` : ""}
+    ${lines.length ? `<ul class="group-lines">${lines.map(line => `<li class="${line.kind}">${esc(line.text)}</li>`).join("")}</ul>` : ""}
+    ${groupRemovalSupported ? `<div class="group-reactions">
+      ${reactionCounts(checkin.reactions, myId).map(r => `<button type="button" class="group-reaction${r.mine ? " mine" : ""}" data-emoji="${r.emoji}" aria-pressed="${r.mine}" aria-label="${r.emoji} ${r.count}件">${r.emoji}<span>${r.count || ""}</span></button>`).join("")}
+    </div>` : ""}
+    <div class="group-comments">
+      ${(checkin.comments || []).map(c => `<p class="group-comment">
+        <b>${esc(members.get(c.member_id)?.display_name || "メンバー")}</b> ${esc(c.body)}
+        ${groupRemovalSupported && (c.member_id === myId || isOwner) ? `<button type="button" class="group-comment-del" data-comment-id="${esc(c.id)}" aria-label="コメントを削除">×</button>` : ""}
+      </p>`).join("")}
+    </div>
+    <form class="group-comment-form">
+      <input type="text" class="input" maxlength="100" placeholder="コメントする" aria-label="コメント">
+      <button type="submit">送信</button>
+    </form>
+  </article>`);
+
+  const run = async (name, params, done) => {
+    const membership = currentMembership();
+    if (!membership) return;
+    try {
+      await callGroupRpc(name, { p_member_id: membership.memberId, p_secret: membership.secret, ...params });
+      if (done) toast(done);
+      renderGroup();
+    } catch (err) {
+      toast(groupErrorMessage(err));
+    }
+  };
+  card.querySelectorAll(".group-reaction").forEach(button => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      run("kintore_group_react", { p_checkin_id: checkin.id, p_emoji: button.dataset.emoji });
+    });
+  });
+  card.querySelectorAll(".group-comment-del").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!confirm("このコメントを削除しますか？")) return;
+      run("kintore_group_comment_delete", { p_comment_id: button.dataset.commentId }, "コメントを削除しました");
+    });
+  });
+  const form = card.querySelector(".group-comment-form");
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const input = form.querySelector("input");
+    const text = input.value.trim();
+    if (!text) return;
+    form.querySelector("button").disabled = true;
+    run("kintore_group_comment", { p_checkin_id: checkin.id, p_body: text });
+  });
+  return card;
+}
+
+/* ---------- 作成・参加・引き継ぎ ---------- */
+function openGroupCreate() {
+  const box = openModal(`
+    <h3>👥 グループを作る</h3>
+    <label class="field-label">グループ名
+      <input type="text" id="new-group-name" class="input" maxlength="30" placeholder="例: 朝トレ部">
+    </label>
+    <label class="field-label">グループで表示するあなたの名前
+      <input type="text" id="new-group-display" class="input" maxlength="20" placeholder="例: たかし">
+    </label>
+    <p class="hint">作成後に招待コードと招待リンクが表示されます。最大12人まで参加できます。</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" id="new-group-cancel">キャンセル</button>
+      <button type="button" class="btn-primary" id="new-group-ok">作成する</button>
+    </div>`);
+  box.querySelector("#new-group-display").value = lastDisplayName();
+  box.querySelector("#new-group-cancel").addEventListener("click", closeModal);
+  const ok = box.querySelector("#new-group-ok");
+  ok.addEventListener("click", async () => {
+    const name = box.querySelector("#new-group-name").value.trim();
+    const displayName = box.querySelector("#new-group-display").value.trim();
+    if (!name || !displayName) { toast("グループ名とあなたの名前を入力してください"); return; }
+    ok.disabled = true;
+    const secret = newMemberSecret();
+    try {
+      const created = await callGroupRpc("kintore_group_create", { p_name: name, p_display_name: displayName, p_secret: secret });
+      const membership = membershipFromResponse(created, secret);
+      saveMemberships(upsertMembership(loadMemberships(), membership));
+      closeModal();
+      toast(`「${created.group_name}」を作りました`);
+      openGroup(membership.memberId);
+      openGroupSettings();
+    } catch (err) {
+      ok.disabled = false;
+      toast(groupErrorMessage(err));
+    }
+  });
+  box.querySelector("#new-group-name").focus();
+}
+
+function openGroupJoin(prefillCode = "") {
+  const box = openModal(`
+    <h3>🔑 招待コードで参加</h3>
+    <label class="field-label">招待コード（8文字）
+      <input type="text" id="join-code" class="input group-code-input" maxlength="12" autocapitalize="characters" autocomplete="off" placeholder="例: K7M2QX9A">
+    </label>
+    <div class="group-join-preview" id="join-preview" aria-live="polite"></div>
+    <label class="field-label">グループで表示するあなたの名前
+      <input type="text" id="join-display" class="input" maxlength="20" placeholder="例: たかし">
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" id="join-cancel">キャンセル</button>
+      <button type="button" class="btn-primary" id="join-ok" disabled>参加する</button>
+    </div>`);
+  const codeInput = box.querySelector("#join-code");
+  const preview = box.querySelector("#join-preview");
+  const ok = box.querySelector("#join-ok");
+  box.querySelector("#join-display").value = lastDisplayName();
+  box.querySelector("#join-cancel").addEventListener("click", closeModal);
+  let previewToken = 0;
+  let existing = null;
+
+  const check = async () => {
+    const code = normalizeInviteCode(codeInput.value);
+    const token = ++previewToken;
+    existing = null;
+    ok.disabled = true;
+    ok.textContent = "参加する";
+    if (!INVITE_CODE_RE.test(code)) {
+      preview.textContent = code.length >= 8 ? "コードの形式が違います" : "";
+      return;
+    }
+    preview.textContent = "確認中…";
+    try {
+      const info = await callGroupRpc("kintore_group_preview", { p_code: code });
+      if (token !== previewToken) return;
+      existing = loadMemberships().find(m => m.groupId === info.group_id) || null;
+      preview.innerHTML = `<strong>${esc(info.group_name)}</strong><span>${Number(info.member_count) || 0}/${Number(info.max_members) || 12}人</span>`;
+      if (existing) {
+        preview.innerHTML += '<small>すでに参加しています</small>';
+        ok.textContent = "グループを開く";
+        ok.disabled = false;
+      } else if (info.locked) {
+        preview.innerHTML += '<small>今は新しい参加を止めています</small>';
+      } else if (Number(info.member_count) >= Number(info.max_members)) {
+        preview.innerHTML += '<small>満員です</small>';
+      } else {
+        ok.disabled = false;
+      }
+    } catch (err) {
+      if (token === previewToken) preview.textContent = groupErrorMessage(err);
+    }
+  };
+  codeInput.addEventListener("input", check);
+  codeInput.value = prefillCode;
+  check();
+
+  ok.addEventListener("click", async () => {
+    if (existing) { closeModal(); openGroup(existing.memberId); return; }
+    const code = normalizeInviteCode(codeInput.value);
+    const displayName = box.querySelector("#join-display").value.trim();
+    if (!displayName) { toast("あなたの名前を入力してください"); return; }
+    ok.disabled = true;
+    const secret = newMemberSecret();
+    try {
+      const joined = await callGroupRpc("kintore_group_join", { p_code: code, p_display_name: displayName, p_secret: secret });
+      const membership = membershipFromResponse(joined, secret);
+      saveMemberships(upsertMembership(loadMemberships(), membership));
+      closeModal();
+      toast(`「${joined.group_name}」に参加しました`);
+      openGroup(membership.memberId);
+    } catch (err) {
+      ok.disabled = false;
+      toast(groupErrorMessage(err));
+    }
+  });
+  (prefillCode ? box.querySelector("#join-display") : codeInput).focus();
+}
+
+function openGroupTransferIn() {
+  const box = openModal(`
+    <h3>📲 別の端末から引き継ぐ</h3>
+    <p class="hint">前の端末のグループ画面「招待・設定」→「この端末の引き継ぎコード」に表示されるコードを貼り付けてください。</p>
+    <textarea id="transfer-code" class="input share-text" rows="3" placeholder="KTG1-…"></textarea>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" id="transfer-cancel">キャンセル</button>
+      <button type="button" class="btn-primary" id="transfer-ok">引き継ぐ</button>
+    </div>`);
+  box.querySelector("#transfer-cancel").addEventListener("click", closeModal);
+  const ok = box.querySelector("#transfer-ok");
+  ok.addEventListener("click", async () => {
+    const decoded = decodeTransferCode(box.querySelector("#transfer-code").value);
+    if (!decoded) { toast("引き継ぎコードの形式が違います"); return; }
+    ok.disabled = true;
+    try {
+      const today = todayKey();
+      const feed = await callGroupRpc("kintore_group_feed", { p_member_id: decoded.memberId, p_secret: decoded.secret, p_from: today, p_to: today });
+      const membership = {
+        memberId: decoded.memberId,
+        secret: decoded.secret,
+        groupId: feed.group.id,
+        groupName: feed.group.name,
+        displayName: feed.me.display_name,
+        joinedAt: new Date().toISOString(),
+      };
+      saveMemberships(upsertMembership(loadMemberships(), membership));
+      closeModal();
+      toast(`「${feed.group.name}」を引き継ぎました`);
+      openGroup(membership.memberId);
+    } catch (err) {
+      ok.disabled = false;
+      toast(groupErrorMessage(err));
+    }
+  });
+  box.querySelector("#transfer-code").focus();
+}
+
+/* ---------- 招待・設定 ---------- */
+function openGroupInvite(feed) {
+  const url = inviteUrl(feed.group.invite_code);
+  const text = inviteText(feed.group.name, feed.group.invite_code, url);
+  if (typeof navigator.share === "function") {
+    navigator.share({ text }).catch(err => {
+      if (err.name !== "AbortError") { console.error(err); toast("送れませんでした"); }
+    });
+    return;
+  }
+  navigator.clipboard?.writeText(text)
+    .then(() => toast("招待メッセージをコピーしました"))
+    .catch(() => toast("コピーできませんでした"));
+}
+
+// 招待コードやメンバーは他の人が変えることがあるので、開くたびに最新を読み込む
+function openGroupSettings() {
+  const membership = currentMembership();
+  if (!membership) return;
+  openModal('<div class="chart-empty" id="group-settings-loading">読み込み中…</div>');
+  Promise.all([
+    callGroupRpc("kintore_group_feed", {
+      p_member_id: membership.memberId, p_secret: membership.secret, p_from: todayKey(), p_to: todayKey(),
+    }),
+    ensureRemovalSupport(),
+  ]).then(([data]) => {
+    if (document.querySelector("#group-settings-loading")) drawGroupSettings(data, membership);
+  }).catch(err => {
+    if (!document.querySelector("#group-settings-loading")) return;
+    closeModal();
+    toast(groupErrorMessage(err));
+  });
+}
+
+function drawGroupSettings(feed, membership) {
+  const isOwner = feed.me.role === "owner";
+  const url = inviteUrl(feed.group.invite_code);
+  const box = openModal(`
+    <h3>👥 ${esc(feed.group.name)}</h3>
+    <div class="group-invite">
+      <span>招待コード</span>
+      <strong class="group-code">${esc(feed.group.invite_code)}</strong>
+      ${feed.group.invite_locked ? '<small class="group-locked">今は新しい参加を止めています</small>' : ""}
+      <div class="share-grid">
+        <button type="button" class="share-sns" id="group-invite-send">📱 招待を送る</button>
+        <button type="button" class="share-sns line" id="group-invite-line">LINEで招待</button>
+      </div>
+      <small class="group-invite-url">${esc(url)}</small>
+    </div>
+    <h4 class="group-settings-heading">メンバー（${feed.members.length}/${Number(feed.group.max_members) || 12}人）</h4>
+    <ul class="group-member-list">
+      ${feed.members.map(m => `<li>
+        <span>${esc(m.display_name)}${m.role === "owner" ? '<small class="group-owner">オーナー</small>' : ""}${m.id === feed.me.member_id ? "<small>あなた</small>" : ""}</span>
+        ${isOwner && groupRemovalSupported && m.id !== feed.me.member_id ? `<button type="button" class="group-kick" data-member-id="${esc(m.id)}" data-name="${esc(m.display_name)}">外す</button>` : ""}
+      </li>`).join("")}
+    </ul>
+    ${isOwner ? `<div class="group-owner-tools">
+      <label class="switch-row">
+        <span>新しい参加を受け付ける</span>
+        <input type="checkbox" id="group-accepting" ${feed.group.invite_locked ? "" : "checked"}>
+        <span class="switch-ui" aria-hidden="true"></span>
+      </label>
+      <button type="button" class="btn-outline full" id="group-rotate">招待コードを作り直す</button>
+    </div>` : ""}
+    <div class="btn-col group-settings-actions">
+      <button type="button" class="btn-outline full" id="group-transfer-out">📲 この端末の引き継ぎコード</button>
+      <button type="button" class="btn-danger full" id="group-leave">${groupRemovalSupported ? "グループを退出" : "この端末の一覧から外す"}</button>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn-ghost" id="group-settings-close">閉じる</button></div>`);
+
+  const ownerCall = async (name, params, done) => {
+    try {
+      await callGroupRpc(name, { p_member_id: membership.memberId, p_secret: membership.secret, ...params });
+      if (done) toast(done);
+      if (ui.view === "group") renderGroup();
+      openGroupSettings();
+    } catch (err) {
+      toast(groupErrorMessage(err));
+    }
+  };
+
+  box.querySelector("#group-settings-close").addEventListener("click", closeModal);
+  box.querySelector("#group-invite-send").addEventListener("click", () => openGroupInvite(feed));
+  box.querySelector("#group-invite-line").addEventListener("click", () => {
+    openExternal(shareUrls(inviteText(feed.group.name, feed.group.invite_code, url)).line);
+  });
+  box.querySelectorAll(".group-kick").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!confirm(`${button.dataset.name} さんをグループから外しますか？\nこの人の投稿とコメントも消えます。`)) return;
+      ownerCall("kintore_group_kick", { p_target_member_id: button.dataset.memberId }, "メンバーを外しました");
+    });
+  });
+  box.querySelector("#group-accepting")?.addEventListener("change", e => {
+    ownerCall("kintore_group_set_lock", { p_locked: !e.target.checked }, e.target.checked ? "参加の受付を再開しました" : "新しい参加を止めました");
+  });
+  box.querySelector("#group-rotate")?.addEventListener("click", () => {
+    if (!confirm("招待コードを作り直しますか？\n今のコードと招待リンクは使えなくなります（参加中のメンバーはそのままです）。")) return;
+    ownerCall("kintore_group_rotate_code", {}, "新しい招待コードにしました");
+  });
+  box.querySelector("#group-transfer-out").addEventListener("click", () => openGroupTransferOut(membership));
+  box.querySelector("#group-leave").addEventListener("click", async () => {
+    if (!groupRemovalSupported) {
+      if (!confirm("この端末の一覧からグループを外しますか？\nグループ内のあなたの投稿は残ります。引き継ぎコードを控えておけば、あとで戻れます。")) return;
+      forgetMembership(membership.memberId);
+      groupFeed = null;
+      closeModal();
+      toast("この端末の一覧から外しました");
+      showView("groups");
+      return;
+    }
+    const message = isOwner && feed.members.length > 1
+      ? "グループを退出しますか？\nあなたの投稿とコメントは消え、オーナーは次に古いメンバーへ引き継がれます。"
+      : isOwner
+        ? "グループを退出しますか？\nメンバーがあなただけなので、グループは削除されます。"
+        : "グループを退出しますか？\nあなたの投稿とコメントは消えます。";
+    if (!confirm(message)) return;
+    try {
+      await callGroupRpc("kintore_group_leave", { p_member_id: membership.memberId, p_secret: membership.secret });
+    } catch (err) {
+      if (err.code !== "KINTORE_GROUP_AUTH") { toast(groupErrorMessage(err)); return; }
+    }
+    forgetMembership(membership.memberId);
+    groupFeed = null;
+    closeModal();
+    toast("グループを退出しました");
+    showView("groups");
+  });
+}
+
+function openGroupTransferOut(membership) {
+  const code = encodeTransferCode(membership);
+  const box = openModal(`
+    <h3>📲 この端末の引き継ぎコード</h3>
+    <p class="hint">新しい端末で「グループ」→「別の端末で参加したグループを引き継ぐ」に貼り付けると、同じメンバーとして使えます。</p>
+    <textarea class="input share-text group-transfer-code" rows="3" readonly></textarea>
+    <p class="group-warning">⚠️ このコードを知っている人は、あなたとして投稿できます。他の人には見せないでください。</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" id="transfer-out-close">閉じる</button>
+      <button type="button" class="btn-primary" id="transfer-out-copy">コピー</button>
+    </div>`);
+  const area = box.querySelector("textarea");
+  area.value = code;
+  box.querySelector("#transfer-out-close").addEventListener("click", closeModal);
+  box.querySelector("#transfer-out-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast("引き継ぎコードをコピーしました");
+    } catch {
+      area.select();
+      toast(document.execCommand("copy") ? "引き継ぎコードをコピーしました" : "長押ししてコピーしてください");
+    }
+  });
+}
+
+$("#btn-entry-group").addEventListener("click", () => showView("groups"));
+$("#btn-groups-back").addEventListener("click", () => showView("home"));
+$("#btn-group-back").addEventListener("click", () => showView("groups"));
+$("#btn-group-create").addEventListener("click", openGroupCreate);
+$("#btn-group-join").addEventListener("click", () => openGroupJoin());
+$("#btn-group-transfer-in").addEventListener("click", openGroupTransferIn);
+$("#btn-group-settings").addEventListener("click", openGroupSettings);
+
+// 招待リンク（…/#join=コード）から開いたときは参加画面を出す
+function handleJoinLink() {
+  const code = parseJoinHash(location.hash);
+  if (!code) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  showView("groups");
+  openGroupJoin(code);
+}
+window.addEventListener("hashchange", handleJoinLink);
+
 /* ================= 履歴 / 分析 ================= */
 function renderHistory() {
   // 部位タブ
@@ -1277,6 +2014,7 @@ function renderRunning() {
   const dayRuns = runsForDay(ui.runDate);
   if (!dayRuns.length) dayList.innerHTML = '<div class="chart-empty">この日の記録はありません</div>';
   dayRuns.forEach(run => dayList.appendChild(renderRunRow(ui.runDate, run)));
+  $("#btn-run-share").hidden = !dayRuns.length;
 
   const history = Object.keys(state.runs || {}).sort().reverse()
     .flatMap(key => runsForDay(key).slice().reverse().map(run => ({ key, run })))
@@ -1779,3 +2517,4 @@ initCloudSync({
 });
 
 showView("home");
+handleJoinLink();
