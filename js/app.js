@@ -11,6 +11,7 @@ import { FOOD_DB, MEAL_TYPES, VOLUME_COMPARES } from "./data.js";
 import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc, el } from "./util.js";
 import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
+import { buildDaySummary, formatShareText, drawShareCard, canvasToFile, shareUrls } from "./share.js";
 import {
   connectCloud,
   disconnectCloud,
@@ -391,6 +392,7 @@ function renderHome() {
     ui.runDate = ui.selectedDate;
     showView("running");
   });
+  $("#btn-share-day").disabled = !buildDaySummary(state, ui.selectedDate).hasContent;
 
   // 食事サマリ
   const tot = mealDayTotals(ui.selectedDate);
@@ -1011,6 +1013,78 @@ $("#stretch-video-file").addEventListener("change", async e => {
 $("#btn-add-stretch").addEventListener("click", openStretchRegister);
 $("#btn-stretch-back").addEventListener("click", () => showView("home"));
 
+/* ================= SNSシェア ================= */
+function openExternal(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openShareSheet(key) {
+  const summary = buildDaySummary(state, key);
+  if (!summary.hasContent) { toast("シェアできる記録がありません（重量・回数か距離を入力してください）"); return; }
+  const canNativeShare = typeof navigator.share === "function";
+  const box = openModal(`
+    <h3>📤 記録をシェア</h3>
+    <div class="share-preview"><canvas id="share-canvas" role="img" aria-label="${esc(summary.dateLabel)} の記録画像"></canvas></div>
+    <label class="field-label">投稿テキスト（編集できます）
+      <textarea id="share-text" class="input share-text" rows="7"></textarea>
+    </label>
+    ${canNativeShare ? '<button type="button" class="btn-primary full share-native" id="share-native" disabled>📱 アプリを選んでシェア</button>' : ""}
+    <div class="share-grid">
+      <button type="button" class="share-sns x" id="share-x">𝕏 で投稿</button>
+      <button type="button" class="share-sns line" id="share-line">LINEで送る</button>
+      <button type="button" class="share-sns" id="share-save">画像を保存</button>
+      <button type="button" class="share-sns" id="share-copy">テキストをコピー</button>
+    </div>
+    <p class="hint">画像とテキストはこの端末内で作成され、投稿するまでどこにも送信されません。Instagramは「アプリを選んでシェア」か、画像を保存してから投稿してください。</p>
+    <div class="modal-actions"><button type="button" class="btn-ghost" id="share-close">閉じる</button></div>`);
+  const textArea = box.querySelector("#share-text");
+  textArea.value = formatShareText(summary);
+  const filename = `kintore-${key}.png`;
+  const canvas = drawShareCard(box.querySelector("#share-canvas"), summary);
+  // iOS Safari はタップ直後でないと共有シートを開けないため、画像は先に作っておく
+  let file = null;
+  const filePromise = canvasToFile(canvas, filename)
+    .then(created => { file = created; return created; })
+    .catch(err => { console.error(err); return null; });
+  const nativeButton = box.querySelector("#share-native");
+  filePromise.then(() => { if (nativeButton) nativeButton.disabled = false; });
+
+  box.querySelector("#share-close").addEventListener("click", closeModal);
+  nativeButton?.addEventListener("click", async () => {
+    const text = textArea.value;
+    const data = file && navigator.canShare?.({ files: [file] }) ? { files: [file], text } : { text };
+    try {
+      await navigator.share(data);
+    } catch (err) {
+      if (err.name !== "AbortError") { console.error(err); toast("シェアできませんでした"); }
+    }
+  });
+  box.querySelector("#share-x").addEventListener("click", () => openExternal(shareUrls(textArea.value).x));
+  box.querySelector("#share-line").addEventListener("click", () => openExternal(shareUrls(textArea.value).line));
+  box.querySelector("#share-save").addEventListener("click", async () => {
+    const image = file || await filePromise;
+    if (!image) { toast("画像を作成できませんでした"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(image);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  box.querySelector("#share-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(textArea.value);
+      toast("テキストをコピーしました");
+    } catch {
+      textArea.select();
+      toast(document.execCommand("copy") ? "テキストをコピーしました" : "コピーできませんでした。テキストを長押ししてコピーしてください");
+    }
+  });
+}
+
+$("#btn-share-day").addEventListener("click", () => openShareSheet(ui.selectedDate));
+$("#btn-workout-share").addEventListener("click", () => openShareSheet(ui.workoutDate));
+$("#btn-run-share").addEventListener("click", () => openShareSheet(ui.runDate));
+
 /* ================= 履歴 / 分析 ================= */
 function renderHistory() {
   // 部位タブ
@@ -1277,6 +1351,7 @@ function renderRunning() {
   const dayRuns = runsForDay(ui.runDate);
   if (!dayRuns.length) dayList.innerHTML = '<div class="chart-empty">この日の記録はありません</div>';
   dayRuns.forEach(run => dayList.appendChild(renderRunRow(ui.runDate, run)));
+  $("#btn-run-share").hidden = !dayRuns.length;
 
   const history = Object.keys(state.runs || {}).sort().reverse()
     .flatMap(key => runsForDay(key).slice().reverse().map(run => ({ key, run })))

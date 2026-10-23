@@ -73,6 +73,8 @@
         <h2 class="section-heading">🏃 ランニング</h2>
         <div class="card running-summary" id="home-running-summary"></div>
 
+        <button type="button" class="btn-outline full share-day-btn" id="btn-share-day">📤 この日の記録をSNSでシェア</button>
+
         <h2 class="section-heading">🍽 食事サマリ</h2>
         <div class="card meal-summary" id="home-meal-summary"></div>
 
@@ -218,6 +220,7 @@
       <div class="card">
         <h3 class="card-title">この日の記録</h3>
         <div id="run-day-list"></div>
+        <button type="button" class="btn-outline full share-day-btn run" id="btn-run-share" hidden>📤 この日の記録をSNSでシェア</button>
       </div>
       <div class="card">
         <h3 class="card-title">最近の記録</h3>
@@ -546,7 +549,7 @@
       <header class="app-header slim">
         <button class="icon-btn" id="btn-workout-back">‹</button>
         <h1 id="workout-date-label"></h1>
-        <span class="header-spacer"></span>
+        <button class="text-btn" id="btn-workout-share">シェア</button>
       </header>
       <div class="workout-totals" id="workout-totals"></div>
       <div id="workout-exercises"></div>

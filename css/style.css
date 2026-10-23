@@ -65,6 +65,7 @@ body {
   background: none; border: none; color: #fff;
   font-size: 1rem; cursor: pointer; padding: 4px;
 }
+.text-btn:disabled { opacity: .45; cursor: default; }
 
 /* ---------- Home entrance (date + 3 menus) ---------- */
 .entry {
@@ -474,6 +475,25 @@ body {
 .video-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; color: var(--text-sub); gap: 8px; }
 .video-empty span { font-size: 2.8rem; }
 .video-delete { display: block; margin: 10px auto 0; border: none; background: none; color: #c62828; padding: 6px 12px; cursor: pointer; }
+
+/* ---------- SNS share ---------- */
+.share-day-btn { margin-bottom: 4px; }
+.share-day-btn.run { margin-top: 12px; color: var(--green); border-color: var(--green); }
+.share-preview { margin-bottom: 12px; padding: 10px; border-radius: 14px; background: #f2f2f2; }
+.share-preview canvas {
+  display: block; width: auto; max-width: 100%; max-height: 36vh; margin: 0 auto;
+  border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.15);
+}
+.share-text { min-height: 120px; resize: vertical; font-family: inherit; font-size: .9rem; line-height: 1.55; }
+.share-native { margin-bottom: 10px; }
+.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.share-sns {
+  min-height: 46px; border: 1.5px solid var(--border); border-radius: 12px; background: #fff;
+  color: #333; font-size: .9rem; font-weight: 700; cursor: pointer;
+}
+.share-sns:active { background: #f2f2f2; }
+.share-sns.x { background: #111; border-color: #111; color: #fff; }
+.share-sns.line { background: #06c755; border-color: #06c755; color: #fff; }
 
 /* ---------- Stretch ---------- */
 .stretch-lead { padding: 14px 16px 2px; color: #555; font-size: .85rem; line-height: 1.6; }
