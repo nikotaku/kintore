@@ -24,7 +24,8 @@ import {
 const ui = {
   view: "home",
   homeMonth: new Date(),      // ホームのカレンダー表示月
-  selectedDate: todayKey(),   // ホームで選択中の日付
+  selectedDate: todayKey(),   // ホームで選択中の日付（起動時は今日を自動入力）
+  homeDateFollowsToday: true, // 今日を選択中なら日付が変わったときに追従する
   historyMonth: new Date(),
   historyPart: "ALL",
   historyMode: "calendar",
@@ -196,6 +197,8 @@ function mealDayTotals(key) {
 
 /* ================= ナビゲーション ================= */
 function showView(name) {
+  // 非表示にした動画が裏で再生され続けないよう、ストレッチ画面を離れたら破棄する
+  if (ui.view === "stretch" && name !== "stretch") releaseStretchVideos();
   ui.view = name;
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
   const activeNav = name === "running-guide" ? "running" : name;
@@ -203,7 +206,7 @@ function showView(name) {
     b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch };
   renderers[name]?.();
 }
 
@@ -263,8 +266,45 @@ function renderCalendar(container, monthDate, { light = false, markers = new Set
 }
 
 /* ================= ホーム ================= */
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function selectHomeDate(key) {
+  ui.selectedDate = key;
+  ui.homeDateFollowsToday = key === todayKey();
+  const d = parseKey(key);
+  ui.homeMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function previousWorkoutDate(key) {
+  return Object.keys(state.workouts)
+    .filter(k => k < key && (state.workouts[k] || []).length)
+    .sort().reverse()[0];
+}
+
+function renderHomeEntry() {
+  const key = ui.selectedDate;
+  const isToday = key === todayKey();
+  $("#home-date").value = key;
+  $("#home-date-weekday").textContent = `(${"日月火水木金土"[parseKey(key).getDay()]})`;
+  $("#home-date-auto").hidden = !isToday;
+  $("#btn-home-today").hidden = isToday;
+
+  const distance = runDistance(key);
+  const runDone = runsForDay(key).length > 0;
+  $("#entry-run-status").textContent = runDone ? `${formatDistance(distance)} km 記録済み` : "距離・タイムを記録";
+  $("#btn-entry-run").classList.toggle("done", runDone);
+
+  const stretchCount = stretchList().length;
+  $("#entry-stretch-status").textContent = stretchCount ? `登録した${stretchCount}件の動画を見る` : "動画を登録してはじめる";
+
+  const exerciseCount = (state.workouts[key] || []).length;
+  $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "種目・重量を記録";
+  $("#btn-entry-weight").classList.toggle("done", exerciseCount > 0);
+}
+
 function renderHome() {
   const workoutKeys = new Set(workoutDays());
+  renderHomeEntry();
 
   // カレンダー
   const m = ui.homeMonth;
@@ -272,7 +312,7 @@ function renderHome() {
     markers: workoutKeys,
     selectedKey: ui.selectedDate,
     title: `${MONTH_EN[m.getMonth()]} ${m.getFullYear()}`,
-    onSelect: key => { ui.selectedDate = key; renderHome(); },
+    onSelect: key => { selectHomeDate(key); renderHome(); },
     onMonthChange: d => { ui.homeMonth = new Date(m.getFullYear(), m.getMonth() + d, 1); renderHome(); },
   });
 
@@ -314,7 +354,7 @@ function renderHome() {
   const list = $("#home-workout-list");
   const entries = state.workouts[ui.selectedDate] || [];
   if (!entries.length) {
-    list.innerHTML = `<div class="empty-note">まだ記録がありません。<br>「トレーニングを追加」から始めましょう💪</div>`;
+    list.innerHTML = `<div class="empty-note">まだ記録がありません。<br>上の「ウェイト」から始めましょう💪</div>`;
   } else {
     list.innerHTML = "";
     for (const en of entries) {
@@ -329,11 +369,6 @@ function renderHome() {
       list.appendChild(card);
     }
   }
-
-  const previousWorkoutDate = Object.keys(state.workouts)
-    .filter(k => k < ui.selectedDate && (state.workouts[k] || []).length)
-    .sort().reverse()[0];
-  $("#btn-copy-workout").disabled = !previousWorkoutDate;
 
   // 選択日のランニング
   const dayRuns = runsForDay(ui.selectedDate);
@@ -380,18 +415,49 @@ function macroBars(tot, tg) {
     <div class="macro-track"><div class="macro-fill ${cls}" style="width:${Math.min(100, t ? (v / t) * 100 : 0)}%"></div></div>`).join("");
 }
 
-$("#btn-add-training").addEventListener("click", () => {
-  ui.pickerDate = ui.selectedDate;
+/* ---------- 入口：日付 ---------- */
+$("#home-date").addEventListener("change", e => {
+  const key = e.target.value;
+  if (!DATE_KEY_RE.test(key)) { e.target.value = ui.selectedDate; return; }
+  selectHomeDate(key);
+  renderHome();
+});
+$("#home-date-prev").addEventListener("click", () => { selectHomeDate(addDays(ui.selectedDate, -1)); renderHome(); });
+$("#home-date-next").addEventListener("click", () => { selectHomeDate(addDays(ui.selectedDate, 1)); renderHome(); });
+$("#btn-home-today").addEventListener("click", () => { selectHomeDate(todayKey()); renderHome(); });
+
+// 開いたままのアプリを翌日に再表示したときも、今日の日付を自動入力し直す
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (!ui.homeDateFollowsToday || ui.selectedDate === todayKey()) return;
+  selectHomeDate(todayKey());
+  if (ui.view === "home") renderHome();
+});
+
+/* ---------- 入口：ランニング / ストレッチ / ウェイト ---------- */
+$("#btn-entry-run").addEventListener("click", () => {
+  ui.runDate = ui.selectedDate;
+  showView("running");
+});
+$("#btn-entry-stretch").addEventListener("click", () => showView("stretch"));
+$("#btn-entry-weight").addEventListener("click", () => {
+  const key = ui.selectedDate;
+  if ((state.workouts[key] || []).length) {
+    ui.workoutDate = key;
+    showView("workout");
+    return;
+  }
+  ui.pickerDate = key;
   ui.pickerFrom = "home";
   showView("picker");
 });
+
 $("#btn-copy-workout").addEventListener("click", () => {
-  const sourceKey = Object.keys(state.workouts)
-    .filter(k => k < ui.selectedDate && (state.workouts[k] || []).length)
-    .sort().reverse()[0];
+  const key = ui.pickerDate;
+  const sourceKey = previousWorkoutDate(key);
   if (!sourceKey) { toast("コピーできる過去の記録がありません"); return; }
 
-  const target = state.workouts[ui.selectedDate] || [];
+  const target = state.workouts[key] || [];
   const existingIds = new Set(target.map(en => en.exerciseId));
   const additions = state.workouts[sourceKey]
     .filter(en => !existingIds.has(en.exerciseId))
@@ -402,15 +468,11 @@ $("#btn-copy-workout").addEventListener("click", () => {
       sets: (en.sets || []).map(s => ({ w: s.w, r: s.r })),
     }));
   if (!additions.length) { toast("前回の種目はすべて追加済みです"); return; }
-  state.workouts[ui.selectedDate] = [...target, ...additions];
+  state.workouts[key] = [...target, ...additions];
   save();
-  ui.workoutDate = ui.selectedDate;
+  ui.workoutDate = key;
   toast(`${sourceKey.replaceAll("-", "/")} のメニューをコピーしました`);
   showView("workout");
-});
-$("#btn-quick-run").addEventListener("click", () => {
-  ui.runDate = ui.selectedDate;
-  showView("running");
 });
 $("#btn-settings").addEventListener("click", () => showView("settings"));
 
@@ -457,6 +519,7 @@ function lastDoneLabel(part) {
 function renderPicker() {
   $("#picker-date-label").textContent = ui.pickerDate.replaceAll("-", "/");
   $("#btn-picker-edit").textContent = ui.pickerEdit ? "完了" : "Edit";
+  $("#btn-copy-workout").disabled = !previousWorkoutDate(ui.pickerDate);
   const wrap = $("#picker-groups");
   wrap.innerHTML = "";
   const dayEntries = state.workouts[ui.pickerDate] || [];
@@ -696,6 +759,21 @@ function updateWorkoutTotals(key) {
   boxes[3].textContent = Math.round(dayVolume(key));
 }
 
+/* ---------- 動画の保存（種目フォーム・ストレッチ共通） ---------- */
+const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
+
+function videoFileError(file) {
+  if (!file.type.startsWith("video/")) return "動画ファイルを選択してください";
+  if (file.size > MAX_VIDEO_BYTES) return "動画は250MB以下にしてください";
+  return "";
+}
+
+async function storeExerciseVideo(exerciseId, file) {
+  await saveExerciseVideo(exerciseId, file);
+  state.exerciseVideos[exerciseId] = { name: file.name, type: file.type, size: file.size, updatedAt: new Date().toISOString() };
+  save({ source: "device-only", touch: false });
+}
+
 async function openExerciseVideo(exercise) {
   if (activeVideoUrl) {
     URL.revokeObjectURL(activeVideoUrl);
@@ -716,13 +794,11 @@ async function openExerciseVideo(exercise) {
   input.addEventListener("change", async () => {
     const file = input.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("video/")) { toast("動画ファイルを選択してください"); return; }
-    if (file.size > 250 * 1024 * 1024) { toast("動画は250MB以下にしてください"); return; }
+    const error = videoFileError(file);
+    if (error) { toast(error); return; }
     try {
       box.querySelector("#video-modal-body").innerHTML = '<div class="chart-empty">保存中…</div>';
-      await saveExerciseVideo(exercise.id, file);
-      state.exerciseVideos[exercise.id] = { name: file.name, type: file.type, size: file.size, updatedAt: new Date().toISOString() };
-      save({ source: "device-only", touch: false });
+      await storeExerciseVideo(exercise.id, file);
       toast("フォーム動画を保存しました");
       openExerciseVideo(exercise);
     } catch (err) {
@@ -760,7 +836,7 @@ async function openExerciseVideo(exercise) {
 }
 
 $("#btn-workout-back").addEventListener("click", () => {
-  ui.selectedDate = ui.workoutDate;
+  selectHomeDate(ui.workoutDate);
   showView("home");
 });
 $("#btn-workout-add").addEventListener("click", () => {
@@ -768,6 +844,172 @@ $("#btn-workout-add").addEventListener("click", () => {
   ui.pickerFrom = "workout";
   showView("picker");
 });
+
+/* ================= ストレッチ ================= */
+// ストレッチは部位「ストレッチ」の種目として保存し、動画はフォーム動画と同じ端末内ストアを使う
+const STRETCH_PART = "ストレッチ";
+let stretchVideoUrls = [];
+let stretchRenderToken = 0;
+let stretchVideoTarget = null;
+
+function stretchList() {
+  return state.exercises.filter(ex => ex.part === STRETCH_PART);
+}
+
+function releaseStretchVideos() {
+  stretchRenderToken += 1;
+  stretchVideoUrls.forEach(url => URL.revokeObjectURL(url));
+  stretchVideoUrls = [];
+  $("#stretch-list").innerHTML = "";
+}
+
+function stretchVideoEmpty(message) {
+  return `<div class="stretch-video-empty"><span aria-hidden="true">🎬</span><p>${message}</p></div>`;
+}
+
+function stretchCard(id) {
+  return [...document.querySelectorAll("#stretch-list .stretch-card")].find(card => card.dataset.stretchId === id);
+}
+
+function renderStretch() {
+  releaseStretchVideos();
+  const token = stretchRenderToken;
+  const wrap = $("#stretch-list");
+  const stretches = stretchList();
+  if (!stretches.length) {
+    wrap.innerHTML = `<div class="empty-note stretch-empty">まだストレッチが登録されていません。<br>「＋ ストレッチを登録」から名前と動画を追加しましょう🧘</div>`;
+    return;
+  }
+  stretches.forEach((stretch, idx) => {
+    const card = el(`<article class="stretch-card" data-stretch-id="${esc(stretch.id)}">
+      <div class="stretch-card-head">
+        <span class="stretch-card-no">${idx + 1}</span>
+        <h2>${esc(stretch.name)}</h2>
+      </div>
+      <div class="stretch-card-media">${stretchVideoEmpty("読み込み中…")}</div>
+      <div class="stretch-card-actions">
+        <button type="button" data-act="video">🎥 動画を登録</button>
+        <button type="button" data-act="del" class="del">削除</button>
+      </div>
+    </article>`);
+    card.querySelector('[data-act="video"]').addEventListener("click", () => {
+      stretchVideoTarget = stretch.id;
+      $("#stretch-video-file").click();
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", () => deleteStretch(stretch));
+    wrap.appendChild(card);
+    loadStretchVideo(stretch, card, token);
+  });
+}
+
+async function loadStretchVideo(stretch, card, token) {
+  const media = card.querySelector(".stretch-card-media");
+  try {
+    const blob = await getExerciseVideo(stretch.id);
+    if (token !== stretchRenderToken) return;
+    if (!blob) {
+      media.innerHTML = stretchVideoEmpty("動画はまだ登録されていません");
+      if (state.exerciseVideos[stretch.id]) {
+        delete state.exerciseVideos[stretch.id];
+        save({ source: "device-only", touch: false });
+      }
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    stretchVideoUrls.push(url);
+    media.innerHTML = `<video class="form-video" src="${url}" controls playsinline preload="metadata"></video>`;
+    card.querySelector('[data-act="video"]').textContent = "🎥 動画を変更";
+  } catch (err) {
+    console.error(err);
+    if (token === stretchRenderToken) media.innerHTML = stretchVideoEmpty("動画を読み込めませんでした");
+  }
+}
+
+async function deleteStretch(stretch) {
+  if (!confirm(`「${stretch.name}」を削除しますか？\nこの端末に保存した動画も削除されます。`)) return;
+  state.exercises = state.exercises.filter(ex => ex.id !== stretch.id);
+  delete state.exerciseVideos[stretch.id];
+  save();
+  try { await deleteExerciseVideo(stretch.id); } catch (err) { console.error(err); }
+  if (ui.view === "stretch") renderStretch();
+  toast("ストレッチを削除しました");
+}
+
+function openStretchRegister() {
+  const box = openModal(`
+    <h3>🧘 ストレッチを登録</h3>
+    <label class="field-label">ストレッチ名
+      <input type="text" id="new-stretch-name" class="input" maxlength="40" placeholder="例: 前ももストレッチ">
+    </label>
+    <div class="field-label">動画（あとからでも登録できます）
+      <button type="button" class="stretch-file-btn" id="new-stretch-choose">🎥 動画を選択</button>
+      <span class="stretch-file-name" id="new-stretch-file-name">未選択</span>
+    </div>
+    <input type="file" id="new-stretch-file" accept="video/*" hidden>
+    <p class="hint">動画はこの端末内だけに保存されます。JSONのバックアップには含まれません。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="new-stretch-cancel">キャンセル</button>
+      <button class="btn-primary" id="new-stretch-ok">登録する</button>
+    </div>`);
+  let file = null;
+  const fileInput = box.querySelector("#new-stretch-file");
+  box.querySelector("#new-stretch-choose").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const next = fileInput.files?.[0];
+    if (!next) return;
+    const error = videoFileError(next);
+    if (error) { toast(error); fileInput.value = ""; return; }
+    file = next;
+    box.querySelector("#new-stretch-file-name").textContent = next.name;
+  });
+  box.querySelector("#new-stretch-cancel").addEventListener("click", closeModal);
+  const ok = box.querySelector("#new-stretch-ok");
+  ok.addEventListener("click", async () => {
+    const name = box.querySelector("#new-stretch-name").value.trim();
+    if (!name) { toast("ストレッチ名を入力してください"); return; }
+    if (stretchList().some(s => s.name === name)) { toast("同じ名前のストレッチがあります"); return; }
+    ok.disabled = true;
+    const stretch = { id: uid(), name, part: STRETCH_PART };
+    state.exercises.push(stretch);
+    save();
+    let message = `「${name}」を登録しました`;
+    if (file) {
+      ok.textContent = "保存中…";
+      try {
+        await storeExerciseVideo(stretch.id, file);
+      } catch (err) {
+        console.error(err);
+        message = "登録しましたが、動画を保存できませんでした";
+      }
+    }
+    closeModal();
+    if (ui.view === "stretch") renderStretch();
+    toast(message);
+  });
+  box.querySelector("#new-stretch-name").focus();
+}
+
+$("#stretch-video-file").addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  const id = stretchVideoTarget;
+  e.target.value = "";
+  stretchVideoTarget = null;
+  if (!file || !id) return;
+  const error = videoFileError(file);
+  if (error) { toast(error); return; }
+  const media = stretchCard(id)?.querySelector(".stretch-card-media");
+  if (media) media.innerHTML = stretchVideoEmpty("保存中…");
+  try {
+    await storeExerciseVideo(id, file);
+    toast("ストレッチ動画を保存しました");
+  } catch (err) {
+    console.error(err);
+    toast("動画を保存できませんでした。端末の空き容量を確認してください");
+  }
+  if (ui.view === "stretch") renderStretch();
+});
+$("#btn-add-stretch").addEventListener("click", openStretchRegister);
+$("#btn-stretch-back").addEventListener("click", () => showView("home"));
 
 /* ================= 履歴 / 分析 ================= */
 function renderHistory() {
@@ -876,7 +1118,7 @@ function renderHistoryGraphs() {
 
   // 種目別 推定1RM
   const sel = $("#chart-exercise-select");
-  const exs = state.exercises.filter(e => ui.historyPart === "ALL" || e.part === ui.historyPart);
+  const exs = state.exercises.filter(e => ui.historyPart === "ALL" ? e.part !== STRETCH_PART : e.part === ui.historyPart);
   sel.innerHTML = exs.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
   if (!sel.dataset.bound) {
     sel.dataset.bound = "1";
