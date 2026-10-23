@@ -37,7 +37,7 @@ test("guide has local offline-friendly visuals and accessible references", () =>
 });
 
 test("service worker cache is bumped for the new HTML, CSS and behavior", () => {
-  assert.match(serviceWorker, /kintore-memo-v8/);
+  assert.match(serviceWorker, /kintore-memo-v9/);
   for (const asset of ["index.html", "css/style.css", "js/app.js"]) {
     assert.ok(serviceWorker.includes(`"${asset}"`), `${asset} should be precached`);
   }

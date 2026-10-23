@@ -16,7 +16,7 @@ function num(value) {
   return Number(value) || 0;
 }
 
-function formatDuration(totalSeconds) {
+export function formatDuration(totalSeconds) {
   const sec = Math.max(0, Math.round(num(totalSeconds)));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -24,12 +24,12 @@ function formatDuration(totalSeconds) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function formatPace(paceSeconds) {
+export function formatPace(paceSeconds) {
   const sec = Math.max(0, Math.round(num(paceSeconds)));
   return sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}` : "—";
 }
 
-function formatNumber(value, digits = 0) {
+export function formatNumber(value, digits = 0) {
   return num(value).toLocaleString("ja-JP", { maximumFractionDigits: digits });
 }
 

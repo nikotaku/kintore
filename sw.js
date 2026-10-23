@@ -1,5 +1,5 @@
 // オフラインキャッシュ（コードはnetwork-first、静的素材はstale-while-revalidate）
-const CACHE = "kintore-memo-v8";
+const CACHE = "kintore-memo-v9";
 const ASSETS = [
   ".",
   "index.html",
@@ -11,6 +11,8 @@ const ASSETS = [
   "js/charts.js",
   "js/video-store.js",
   "js/share.js",
+  "js/group.js",
+  "js/config.js",
   "js/cloud-sync.js",
   "js/vendor/supabase-2.75.0.js",
   "manifest.json",

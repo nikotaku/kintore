@@ -64,6 +64,14 @@
             <span class="entry-choice-arrow" aria-hidden="true">›</span>
           </button>
         </div>
+        <button type="button" class="entry-group" id="btn-entry-group">
+          <span class="entry-group-icon" aria-hidden="true">👥</span>
+          <span class="entry-group-copy">
+            <strong>グループ</strong>
+            <small id="entry-group-status">友だちと毎日の記録を見せ合う</small>
+          </span>
+          <span class="entry-group-arrow" aria-hidden="true">›</span>
+        </button>
       </div>
 
       <div class="home-body">
@@ -130,6 +138,33 @@
         <p class="stretch-note">動画はこの端末内だけに保存されます（最大250MB/本）。ストレッチ名はログイン中ならクラウドにも同期されます。</p>
       </div>
       <input type="file" id="stretch-video-file" accept="video/*" hidden>
+    </section>
+
+    <!-- ============ グループ一覧 ============ -->
+    <section class="view" id="view-groups" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-groups-back" aria-label="ホームへ戻る">‹</button>
+        <h1>グループ</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <p class="group-lead">友だちと毎日の記録を見せ合えます。ログインは不要で、招待コードを知っている人だけが参加できます（最大12人）。</p>
+      <div id="group-list"></div>
+      <div class="group-actions">
+        <button class="btn-primary full" id="btn-group-create">＋ グループを作る</button>
+        <button class="btn-outline full" id="btn-group-join">🔑 招待コードで参加</button>
+        <button class="btn-link" id="btn-group-transfer-in">別の端末で参加したグループを引き継ぐ</button>
+      </div>
+      <p class="group-note">グループに共有されるのは、投稿した日のトレーニング要約（種目・重量・回数・ランニング）と一言・コメントだけです。食事・体重・動画は共有されません。参加情報はこの端末に保存されます。</p>
+    </section>
+
+    <!-- ============ グループ詳細 ============ -->
+    <section class="view" id="view-group" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-group-back" aria-label="グループ一覧へ戻る">‹</button>
+        <h1 id="group-title">グループ</h1>
+        <button class="text-btn" id="btn-group-settings">招待・設定</button>
+      </header>
+      <div id="group-body"></div>
     </section>
 
     <!-- ============ 履歴/分析 ============ -->

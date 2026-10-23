@@ -4,9 +4,8 @@ import {
   summarizeState,
   toCloudSnapshot,
 } from "./store.js";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
 
-const SUPABASE_URL = "https://imrxzkivwrkqbhqfbbes.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_T0a9mtOIbupU5n_VAe9caw_xlnbbWfB";
 const FUNCTION_NAME = "daily-kintore-advice";
 const SYNC_META_KEY = "kintore-cloud-sync-meta-v1";
 const OWNER_KEY = "kintore-cloud-owner-v1";
