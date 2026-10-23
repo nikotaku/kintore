@@ -19,48 +19,54 @@
         <h1>筋トレ・ランニング MEMO</h1>
         <span class="header-spacer"></span>
       </header>
-      <div class="hero">
-        <div class="hero-grid">
-          <div class="cal-wrap" id="home-calendar"></div>
-          <div class="stats-col">
-            <div class="stat-card">
-              <div class="stat-title">合計負荷量/7日間</div>
-              <div class="stat-value-row">
-                <span class="stat-value" id="stat-vol-7d">0 t</span>
-                <span class="stat-compare" id="stat-cmp-7d">🚗 × 0.0</span>
-              </div>
-              <div class="week-bars" id="week-bars"></div>
+
+      <div class="entry">
+        <div class="entry-date">
+          <div class="entry-date-head">
+            <label for="home-date">日付</label>
+            <span class="entry-date-auto" id="home-date-auto">今日を自動入力</span>
+            <button type="button" class="entry-date-today" id="btn-home-today" hidden>今日に戻す</button>
+          </div>
+          <div class="entry-date-row">
+            <button type="button" class="entry-date-step" id="home-date-prev" aria-label="前の日">‹</button>
+            <div class="entry-date-field">
+              <input type="date" id="home-date" class="entry-date-input" required>
+              <span class="entry-date-weekday" id="home-date-weekday"></span>
             </div>
-            <div class="stat-card">
-              <div class="stat-title">合計負荷量/28日間</div>
-              <div class="stat-value-row">
-                <span class="stat-value" id="stat-vol-28d">0 t</span>
-                <span class="stat-compare" id="stat-cmp-28d">🚌 × 0.0</span>
-              </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">総合計負荷量</div>
-              <div class="stat-value-row">
-                <span class="stat-value" id="stat-vol-all">0 t</span>
-                <span class="stat-compare" id="stat-cmp-all">✈️ × 0.0</span>
-              </div>
-            </div>
+            <button type="button" class="entry-date-step" id="home-date-next" aria-label="次の日">›</button>
           </div>
         </div>
-        <div class="archive-row">
-          <span class="archive-label">MONTHLY<br>ARCHIVE</span>
-          <span class="archive-days"><b id="month-days">0</b> days</span>
-          <span class="archive-total">TOTAL <b id="total-days">0</b> days</span>
+
+        <h2 class="entry-heading">メニューを選ぶ</h2>
+        <div class="entry-choices">
+          <button type="button" class="entry-choice run" id="btn-entry-run">
+            <span class="entry-choice-icon" aria-hidden="true">🏃</span>
+            <span class="entry-choice-copy">
+              <strong>ランニング</strong>
+              <small id="entry-run-status">距離・タイムを記録</small>
+            </span>
+            <span class="entry-choice-arrow" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="entry-choice stretch" id="btn-entry-stretch">
+            <span class="entry-choice-icon" aria-hidden="true">🧘</span>
+            <span class="entry-choice-copy">
+              <strong>ストレッチ</strong>
+              <small id="entry-stretch-status">登録した動画を見る</small>
+            </span>
+            <span class="entry-choice-arrow" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="entry-choice weight" id="btn-entry-weight">
+            <span class="entry-choice-icon" aria-hidden="true">🏋️</span>
+            <span class="entry-choice-copy">
+              <strong>ウェイト</strong>
+              <small id="entry-weight-status">種目・重量を記録</small>
+            </span>
+            <span class="entry-choice-arrow" aria-hidden="true">›</span>
+          </button>
         </div>
       </div>
 
       <div class="home-body">
-        <div class="action-row quick-actions">
-          <button class="btn-primary" id="btn-add-training">＋ トレーニングを追加</button>
-          <button class="btn-outline" id="btn-copy-workout">⏱ 前回メニュー</button>
-          <button class="btn-outline run" id="btn-quick-run">🏃 ランニング</button>
-        </div>
-
         <h2 class="section-heading" id="home-date-heading"></h2>
         <div id="home-workout-list"></div>
 
@@ -69,7 +75,59 @@
 
         <h2 class="section-heading">🍽 食事サマリ</h2>
         <div class="card meal-summary" id="home-meal-summary"></div>
+
+        <h2 class="section-heading">📅 カレンダー・負荷量</h2>
+        <div class="hero">
+          <div class="hero-grid">
+            <div class="cal-wrap" id="home-calendar"></div>
+            <div class="stats-col">
+              <div class="stat-card">
+                <div class="stat-title">合計負荷量/7日間</div>
+                <div class="stat-value-row">
+                  <span class="stat-value" id="stat-vol-7d">0 t</span>
+                  <span class="stat-compare" id="stat-cmp-7d">🚗 × 0.0</span>
+                </div>
+                <div class="week-bars" id="week-bars"></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-title">合計負荷量/28日間</div>
+                <div class="stat-value-row">
+                  <span class="stat-value" id="stat-vol-28d">0 t</span>
+                  <span class="stat-compare" id="stat-cmp-28d">🚌 × 0.0</span>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-title">総合計負荷量</div>
+                <div class="stat-value-row">
+                  <span class="stat-value" id="stat-vol-all">0 t</span>
+                  <span class="stat-compare" id="stat-cmp-all">✈️ × 0.0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="archive-row">
+            <span class="archive-label">MONTHLY<br>ARCHIVE</span>
+            <span class="archive-days"><b id="month-days">0</b> days</span>
+            <span class="archive-total">TOTAL <b id="total-days">0</b> days</span>
+          </div>
+        </div>
       </div>
+    </section>
+
+    <!-- ============ ストレッチ ============ -->
+    <section class="view" id="view-stretch" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-stretch-back" aria-label="ホームへ戻る">‹</button>
+        <h1>ストレッチ</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <p class="stretch-lead">登録したストレッチの動画を見ながら進めましょう。</p>
+      <div id="stretch-list"></div>
+      <div class="stretch-actions">
+        <button class="btn-primary full stretch-add" id="btn-add-stretch">＋ ストレッチを登録</button>
+        <p class="stretch-note">動画はこの端末内だけに保存されます（最大250MB/本）。ストレッチ名はログイン中ならクラウドにも同期されます。</p>
+      </div>
+      <input type="file" id="stretch-video-file" accept="video/*" hidden>
     </section>
 
     <!-- ============ 履歴/分析 ============ -->
@@ -477,6 +535,7 @@
         <button class="text-btn" id="btn-picker-edit">Edit</button>
       </header>
       <div class="picker-toolbar">
+        <button class="btn-outline small" id="btn-copy-workout">⏱ 前回メニューをコピー</button>
         <button class="btn-outline small" id="btn-add-part">＋ 部位・種目を追加</button>
       </div>
       <div id="picker-groups"></div>
