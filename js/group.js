@@ -54,10 +54,29 @@ export async function callGroupRpc(name, params, fetchImpl = globalThis.fetch) {
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
   if (!response.ok) {
-    const code = typeof body?.message === "string" ? body.message : "";
-    throw new GroupError(code || `HTTP_${response.status}`, ERROR_MESSAGES[code] || ERROR_MESSAGES.UNKNOWN);
+    const message = typeof body?.message === "string" ? body.message : "";
+    const code = message.startsWith("KINTORE_GROUP_") ? message : (body?.code || `HTTP_${response.status}`);
+    throw new GroupError(code, ERROR_MESSAGES[code] || ERROR_MESSAGES.UNKNOWN);
   }
   return body;
+}
+
+// 取り消し系の関数（リアクション・投稿の取り消し・退出など）がサーバーに入っているかを確かめる。
+// 存在すれば架空のメンバーで呼んで認証エラーになり、未適用なら「関数が見つからない」になる。
+// 判定できない（通信エラー）ときは null を返す。
+export async function detectRemovalSupport(fetchImpl = globalThis.fetch) {
+  try {
+    await callGroupRpc("kintore_group_react", {
+      p_member_id: "00000000-0000-4000-8000-000000000000",
+      p_secret: "0".repeat(32),
+      p_checkin_id: "00000000-0000-4000-8000-000000000000",
+      p_emoji: "👏",
+    }, fetchImpl);
+    return true;
+  } catch (err) {
+    if (err.code === "NETWORK") return null;
+    return !(err.code === "PGRST202" || err.code === "HTTP_404");
+  }
 }
 
 /* ---------- 招待コード・招待リンク ---------- */

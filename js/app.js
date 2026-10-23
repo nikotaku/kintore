@@ -20,6 +20,7 @@ import {
   checkinLines,
   checkinPayload,
   decodeTransferCode,
+  detectRemovalSupport,
   encodeTransferCode,
   hasCheckinContent,
   inviteText,
@@ -1116,6 +1117,16 @@ $("#btn-run-share").addEventListener("click", () => openShareSheet(ui.runDate));
 /* ================= グループ（ログイン不要・招待コード制） ================= */
 let groupRenderToken = 0;
 let groupFeed = null;
+// 取り消し系のサーバー関数があるか（null は未確認）。無い間はリアクション・取り消し・退出などを出さない
+let groupRemovalSupported = null;
+
+async function ensureRemovalSupport() {
+  if (groupRemovalSupported !== true) {
+    const detected = await detectRemovalSupport();
+    if (detected !== null) groupRemovalSupported = detected;
+  }
+  return groupRemovalSupported === true;
+}
 
 function currentMembership() {
   return loadMemberships().find(m => m.memberId === ui.groupMemberId) || null;
@@ -1188,12 +1199,15 @@ async function renderGroup() {
     body.innerHTML = '<div class="chart-empty">読み込み中…</div>';
   }
   try {
-    const feed = await callGroupRpc("kintore_group_feed", {
-      p_member_id: membership.memberId,
-      p_secret: membership.secret,
-      p_from: ui.groupWeek,
-      p_to: addDays(ui.groupWeek, 6),
-    });
+    const [feed] = await Promise.all([
+      callGroupRpc("kintore_group_feed", {
+        p_member_id: membership.memberId,
+        p_secret: membership.secret,
+        p_from: ui.groupWeek,
+        p_to: addDays(ui.groupWeek, 6),
+      }),
+      ensureRemovalSupport(),
+    ]);
     if (token !== groupRenderToken) return;
     groupFeed = feed;
     if (feed.group.name !== membership.groupName || feed.me.display_name !== membership.displayName) {
@@ -1255,7 +1269,7 @@ function groupCheckinCard(feed) {
     <input type="text" id="group-note" class="input" maxlength="100" placeholder="ひとこと（任意） 例: 脚の日！">
     <div class="group-checkin-actions">
       <button type="button" class="btn-primary" id="btn-group-post">${mine ? "投稿を更新" : "グループに投稿"}</button>
-      ${mine ? '<button type="button" class="btn-ghost" id="btn-group-unpost">取り消す</button>' : ""}
+      ${mine && groupRemovalSupported ? '<button type="button" class="btn-ghost" id="btn-group-unpost">取り消す</button>' : ""}
     </div>
     <p class="group-share-note">${outOfWindow ? "投稿できるのは今日から7日前までの記録です。ホームで日付を選び直してください。" : "共有されるのは種目・重量・回数・ランの要約と一言だけです。"}</p>
   </section>`);
@@ -1355,13 +1369,13 @@ function groupPostCard(checkin, feed) {
     </header>
     ${checkin.note ? `<p class="group-post-note">${esc(checkin.note)}</p>` : ""}
     ${lines.length ? `<ul class="group-lines">${lines.map(line => `<li class="${line.kind}">${esc(line.text)}</li>`).join("")}</ul>` : ""}
-    <div class="group-reactions">
+    ${groupRemovalSupported ? `<div class="group-reactions">
       ${reactionCounts(checkin.reactions, myId).map(r => `<button type="button" class="group-reaction${r.mine ? " mine" : ""}" data-emoji="${r.emoji}" aria-pressed="${r.mine}" aria-label="${r.emoji} ${r.count}件">${r.emoji}<span>${r.count || ""}</span></button>`).join("")}
-    </div>
+    </div>` : ""}
     <div class="group-comments">
       ${(checkin.comments || []).map(c => `<p class="group-comment">
         <b>${esc(members.get(c.member_id)?.display_name || "メンバー")}</b> ${esc(c.body)}
-        ${c.member_id === myId || isOwner ? `<button type="button" class="group-comment-del" data-comment-id="${esc(c.id)}" aria-label="コメントを削除">×</button>` : ""}
+        ${groupRemovalSupported && (c.member_id === myId || isOwner) ? `<button type="button" class="group-comment-del" data-comment-id="${esc(c.id)}" aria-label="コメントを削除">×</button>` : ""}
       </p>`).join("")}
     </div>
     <form class="group-comment-form">
@@ -1582,9 +1596,12 @@ function openGroupSettings() {
   const membership = currentMembership();
   if (!membership) return;
   openModal('<div class="chart-empty" id="group-settings-loading">読み込み中…</div>');
-  callGroupRpc("kintore_group_feed", {
-    p_member_id: membership.memberId, p_secret: membership.secret, p_from: todayKey(), p_to: todayKey(),
-  }).then(data => {
+  Promise.all([
+    callGroupRpc("kintore_group_feed", {
+      p_member_id: membership.memberId, p_secret: membership.secret, p_from: todayKey(), p_to: todayKey(),
+    }),
+    ensureRemovalSupport(),
+  ]).then(([data]) => {
     if (document.querySelector("#group-settings-loading")) drawGroupSettings(data, membership);
   }).catch(err => {
     if (!document.querySelector("#group-settings-loading")) return;
@@ -1612,7 +1629,7 @@ function drawGroupSettings(feed, membership) {
     <ul class="group-member-list">
       ${feed.members.map(m => `<li>
         <span>${esc(m.display_name)}${m.role === "owner" ? '<small class="group-owner">オーナー</small>' : ""}${m.id === feed.me.member_id ? "<small>あなた</small>" : ""}</span>
-        ${isOwner && m.id !== feed.me.member_id ? `<button type="button" class="group-kick" data-member-id="${esc(m.id)}" data-name="${esc(m.display_name)}">外す</button>` : ""}
+        ${isOwner && groupRemovalSupported && m.id !== feed.me.member_id ? `<button type="button" class="group-kick" data-member-id="${esc(m.id)}" data-name="${esc(m.display_name)}">外す</button>` : ""}
       </li>`).join("")}
     </ul>
     ${isOwner ? `<div class="group-owner-tools">
@@ -1625,7 +1642,7 @@ function drawGroupSettings(feed, membership) {
     </div>` : ""}
     <div class="btn-col group-settings-actions">
       <button type="button" class="btn-outline full" id="group-transfer-out">📲 この端末の引き継ぎコード</button>
-      <button type="button" class="btn-danger full" id="group-leave">グループを退出</button>
+      <button type="button" class="btn-danger full" id="group-leave">${groupRemovalSupported ? "グループを退出" : "この端末の一覧から外す"}</button>
     </div>
     <div class="modal-actions"><button type="button" class="btn-ghost" id="group-settings-close">閉じる</button></div>`);
 
@@ -1660,6 +1677,15 @@ function drawGroupSettings(feed, membership) {
   });
   box.querySelector("#group-transfer-out").addEventListener("click", () => openGroupTransferOut(membership));
   box.querySelector("#group-leave").addEventListener("click", async () => {
+    if (!groupRemovalSupported) {
+      if (!confirm("この端末の一覧からグループを外しますか？\nグループ内のあなたの投稿は残ります。引き継ぎコードを控えておけば、あとで戻れます。")) return;
+      forgetMembership(membership.memberId);
+      groupFeed = null;
+      closeModal();
+      toast("この端末の一覧から外しました");
+      showView("groups");
+      return;
+    }
     const message = isOwner && feed.members.length > 1
       ? "グループを退出しますか？\nあなたの投稿とコメントは消え、オーナーは次に古いメンバーへ引き継がれます。"
       : isOwner

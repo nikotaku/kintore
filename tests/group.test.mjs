@@ -8,6 +8,7 @@ import {
   checkinLines,
   checkinPayload,
   decodeTransferCode,
+  detectRemovalSupport,
   encodeTransferCode,
   hasCheckinContent,
   inviteText,
@@ -169,6 +170,21 @@ test("rpc calls post to the Supabase function and map errors to Japanese message
     callGroupRpc("kintore_group_join", {}, async () => { throw new TypeError("Failed to fetch"); }),
     err => err instanceof GroupError && err.code === "NETWORK",
   );
+  await assert.rejects(
+    callGroupRpc("kintore_group_react", {}, fakeFetch(404, { code: "PGRST202", message: "Could not find the function" })),
+    err => err instanceof GroupError && err.code === "PGRST202",
+  );
+});
+
+test("removal functions are detected without side effects", async () => {
+  const respond = (status, body) => async () => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
+  assert.equal(await detectRemovalSupport(respond(404, { code: "PGRST202", message: "Could not find the function" })), false);
+  assert.equal(await detectRemovalSupport(respond(400, { code: "P0001", message: "KINTORE_GROUP_AUTH" })), true);
+  assert.equal(await detectRemovalSupport(async () => { throw new TypeError("offline"); }), null);
+  let sent = null;
+  await detectRemovalSupport(async (url, init) => { sent = { url, body: JSON.parse(init.body) }; return { ok: false, status: 400, text: async () => '{"message":"KINTORE_GROUP_AUTH"}' }; });
+  assert.match(sent.url, /kintore_group_react$/);
+  assert.equal(sent.body.p_member_id, "00000000-0000-4000-8000-000000000000", "probes with a member that cannot exist");
 });
 
 test("group screens, entry point and join-link handling are wired", async () => {
