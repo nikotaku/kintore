@@ -10,6 +10,22 @@ const FUNCTION_NAME = "daily-kintore-advice";
 const SYNC_META_KEY = "kintore-cloud-sync-meta-v1";
 const OWNER_KEY = "kintore-cloud-owner-v1";
 const STATE_VERSION = 2;
+export const AUTO_SYNC_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
+
+export function isPeriodicSyncDue(lastSyncedAt, now = Date.now()) {
+  const last = Date.parse(lastSyncedAt || "");
+  return !Number.isFinite(last) || now - last >= AUTO_SYNC_INTERVAL_MS;
+}
+
+async function syncIfDue() {
+  if (!currentSession || pendingConflict || navigator.onLine === false || syncInFlight) return;
+  if (!isPeriodicSyncDue(status.lastSyncedAt)) return;
+  try {
+    await syncCloudNow(getCurrentState?.());
+  } catch (error) {
+    if (!isStaleSessionError(error)) console.warn("periodic cloud sync failed", error);
+  }
+}
 
 let client = null;
 let currentSession = null;
@@ -692,7 +708,15 @@ export async function initCloudSync({ onStatus, getState, applyState, onConflict
       return;
     }
     if (pendingState) scheduleCloudSync(pendingState, 0);
+    else void syncIfDue();
   });
+  window.addEventListener("pageshow", () => { void syncIfDue(); });
+  window.addEventListener("focus", () => { void syncIfDue(); });
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void syncIfDue();
+  });
+  const periodicTimer = setInterval(() => { void syncIfDue(); }, 60 * 60 * 1000);
+  periodicTimer?.unref?.();
 
   const { data, error } = await client.auth.getSession();
   if (error) {
@@ -705,6 +729,7 @@ export async function initCloudSync({ onStatus, getState, applyState, onConflict
     return;
   }
   await prepareSession(context.session, context.epoch);
+  if (globalThis.document) await syncIfDue();
   await refreshLastAdvice(context.session, context.epoch);
 }
 
