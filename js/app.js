@@ -12,6 +12,7 @@ import { dkey, parseKey, todayKey, addDays, fmtDateJP, estimate1RM, round1, esc,
 import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
 import { buildDaySummary, formatShareText, drawShareCard, canvasToFile, shareUrls } from "./share.js";
+import { formatAIContext } from "./ai-context.js";
 import {
   GroupError,
   GROUP_POST_WINDOW_DAYS,
@@ -2335,7 +2336,15 @@ function updateCloudUI(nextStatus = getCloudStatus()) {
       : "最終同期：まだありません";
   }
 
-  ["#btn-cloud-connect", "#btn-cloud-sync", "#btn-test-advice", "#btn-cloud-disconnect", "#btn-save-advice"]
+  const aiState = $("#ai-storage-state");
+  if (aiState) {
+    aiState.textContent = nextStatus.connected
+      ? "クラウド接続済み。保存した履歴をAIが読み取れます。"
+      : "端末内だけに保存中です。下のログインを1回行うと、AIから読み取れるようになります。";
+    aiState.classList.toggle("ready", nextStatus.connected);
+  }
+
+  ["#btn-cloud-connect", "#btn-cloud-sync", "#btn-ai-sync", "#btn-test-advice", "#btn-cloud-disconnect", "#btn-save-advice"]
     .forEach(selector => {
       const button = $(selector);
       if (button) button.disabled = !!nextStatus.busy || !nextStatus.available;
@@ -2365,6 +2374,38 @@ $("#btn-save-targets").addEventListener("click", () => {
   };
   save();
   toast("目標を保存しました");
+});
+
+$("#btn-ai-sync").addEventListener("click", async () => {
+  if (!cloudStatus.connected) {
+    toast("先に下のログインからクラウドへ接続してください");
+    $("#cloud-email").focus();
+    return;
+  }
+  try {
+    await syncCloudNow(state);
+    toast("AIが読める最新状態に更新しました");
+  } catch (error) {
+    console.error(error);
+    toast("更新に失敗しました。記録は端末に残っています");
+  }
+});
+
+$("#btn-ai-copy").addEventListener("click", async () => {
+  const text = formatAIContext(state);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("直近180日分のAI用データをコピーしました");
+  } catch (error) {
+    console.error(error);
+    const blob = new Blob([text], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `kintore-ai-${todayKey()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("AI用データを保存しました");
+  }
 });
 
 function saveAdviceForm() {
