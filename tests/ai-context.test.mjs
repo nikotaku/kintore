@@ -36,6 +36,21 @@ test("AI context excludes credentials and video metadata", () => {
   assert.match(text, /ベンチプレス/);
 });
 
+test("early morning exports include today's local records", () => {
+  const previousTZ = process.env.TZ;
+  process.env.TZ = "Asia/Tokyo";
+  try {
+    const result = buildAIContext(state, { days: 1, now: new Date("2026-11-02T07:00:00+09:00") });
+    assert.equal(result.period.to, "2026-11-02");
+    assert.equal(result.period.from, "2026-11-02");
+    assert.equal(result.summary.runDistanceKm, 5.2);
+    assert.equal(result.body["2026-11-02"].weight, 69);
+  } finally {
+    if (previousTZ === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTZ;
+  }
+});
+
 test("AI database view keeps the snapshot RLS and read-only grants", async () => {
   const view = await readFile(new URL("../supabase/migrations/20261102000000_kintore_ai_context.sql", import.meta.url), "utf8");
   const grants = await readFile(new URL("../supabase/migrations/20261102000100_kintore_ai_context_read_only.sql", import.meta.url), "utf8");
