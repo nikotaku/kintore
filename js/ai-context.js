@@ -1,4 +1,4 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { addDays, dkey } from "./util.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -16,10 +16,6 @@ function filterDateMap(value, from, to) {
     .map(([key, entry]) => [key, clone(entry)]));
 }
 
-function dateKey(value) {
-  return value.toISOString().slice(0, 10);
-}
-
 function finite(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -27,9 +23,8 @@ function finite(value) {
 
 export function buildAIContext(state, { days = 180, now = new Date() } = {}) {
   const safeDays = Math.min(730, Math.max(1, Math.trunc(Number(days) || 180)));
-  const to = dateKey(now);
-  const fromDate = new Date(now.getTime() - (safeDays - 1) * DAY_MS);
-  const from = dateKey(fromDate);
+  const to = dkey(now);
+  const from = addDays(to, -(safeDays - 1));
   const workouts = filterDateMap(state?.workouts, from, to);
   const runs = filterDateMap(state?.runs, from, to);
   const meals = filterDateMap(state?.meals, from, to);
