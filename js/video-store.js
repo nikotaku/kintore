@@ -19,9 +19,15 @@ function transaction(mode, action) {
     const tx = db.transaction(STORE_NAME, mode);
     const store = tx.objectStore(STORE_NAME);
     const request = action(store);
-    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-    tx.oncomplete = () => db.close();
+    tx.oncomplete = () => {
+      db.close();
+      resolve(request.result);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error("動画の保存処理が中断されました"));
+    };
   }));
 }
 
