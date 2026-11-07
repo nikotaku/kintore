@@ -17,9 +17,9 @@ test("home opens with a date field that is auto-filled with today", () => {
   assert.match(app, /document\.addEventListener\("visibilitychange"/);
 });
 
-test("home entrance offers running, stretch and weight in that order", () => {
-  const order = ["btn-entry-run", "btn-entry-stretch", "btn-entry-weight"].map(id => homeHtml.indexOf(`id="${id}"`));
-  assert.ok(order.every(index => index > 0), "all three entrance buttons exist");
+test("home entrance offers kickboxing immediately below running", () => {
+  const order = ["btn-entry-run", "btn-entry-kickboxing", "btn-entry-stretch", "btn-entry-weight"].map(id => homeHtml.indexOf(`id="${id}"`));
+  assert.ok(order.every(index => index > 0), "all four entrance buttons exist");
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.ok(homeHtml.indexOf('id="home-date"') < order[0], "date comes before the menu buttons");
   assert.doesNotMatch(html, /id="btn-add-training"|id="btn-quick-run"/);
