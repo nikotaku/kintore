@@ -84,6 +84,12 @@ export function buildAIContext(state, { days = 180, now = new Date() } = {}) {
     exercises: Array.isArray(state?.exercises) ? clone(state.exercises) : [],
     workouts,
     runs,
+    kickboxing: Object.fromEntries(Object.entries(filterDateMap(state?.kickboxing, from, to))
+      .filter(([, entries]) => Array.isArray(entries))
+      .map(([date, entries]) => [date, entries.map(entry => ({
+        practice: String(entry?.practice || ""),
+        feedback: String(entry?.feedback || ""),
+      }))])),
     meals,
     body,
   };
