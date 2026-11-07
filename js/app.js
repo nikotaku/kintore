@@ -57,6 +57,7 @@ const ui = {
   historySelected: null,
   mealDate: todayKey(),
   runDate: todayKey(),
+  kickboxingDate: todayKey(),
   runTipOffset: 0,
   runDrafts: {},              // 日付ごとの未保存入力（ガイド往復・再描画で保持）
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
@@ -160,6 +161,7 @@ function workoutDays() {
   Object.keys(state.runs || {}).forEach(k => {
     if ((state.runs[k] || []).length) days.add(k);
   });
+  Object.keys(state.kickboxing).forEach(k => days.add(k));
   return [...days];
 }
 
@@ -234,7 +236,7 @@ function showView(name) {
     b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, kickboxing: renderKickboxing, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup };
   renderers[name]?.();
 }
 
@@ -321,6 +323,9 @@ function renderHomeEntry() {
   const runDone = runsForDay(key).length > 0;
   $("#entry-run-status").textContent = runDone ? `${formatDistance(distance)} km 記録済み` : "距離・タイムを記録";
   $("#btn-entry-run").classList.toggle("done", runDone);
+  const kickboxingCount = state.kickboxing[key]?.length || 0;
+  $("#entry-kickboxing-status").textContent = kickboxingCount ? `${kickboxingCount}件 記録済み` : "動画・フィードバックを記録";
+  $("#btn-entry-kickboxing").classList.toggle("done", kickboxingCount > 0);
 
   const stretchCount = stretchList().length;
   $("#entry-stretch-status").textContent = stretchCount ? `登録した${stretchCount}件の動画を見る` : "動画を登録してはじめる";
@@ -472,6 +477,10 @@ $("#btn-entry-run").addEventListener("click", () => {
   showView("running");
 });
 $("#btn-entry-stretch").addEventListener("click", () => showView("stretch"));
+$("#btn-entry-kickboxing").addEventListener("click", () => {
+  ui.kickboxingDate = ui.selectedDate;
+  showView("kickboxing");
+});
 $("#btn-entry-weight").addEventListener("click", () => {
   const key = ui.selectedDate;
   if ((state.workouts[key] || []).length) {
@@ -2074,7 +2083,128 @@ $("#btn-save-run").addEventListener("click", () => {
   toast("ランニングを記録しました");
 });
 
+/* ================= キックボクシング ================= */
+function renderKickboxing() {
+  $("#kickboxing-date").textContent = fmtDateJP(ui.kickboxingDate);
+  const list = $("#kickboxing-list");
+  list.replaceChildren();
+  const entries = state.kickboxing[ui.kickboxingDate] || [];
+  if (!entries.length) list.append(el('<p class="chart-empty">この日の練習記録はありません</p>'));
+  entries.forEach((entry, i) => {
+    const card = el(`<article class="card">
+      <h3 class="card-title">練習 ${i + 1}</h3>
+      ${entry.practice ? `<p class="kickboxing-note">${esc(entry.practice)}</p>` : ""}
+      ${entry.feedback ? `<p class="kickboxing-note"><strong>フィードバック</strong><br>${esc(entry.feedback)}</p>` : ""}
+      <button type="button" class="btn-outline">${entry.videoName ? "動画・記録を開く" : "記録を編集"}</button>
+    </article>`);
+    card.querySelector("button").addEventListener("click", () => openKickboxingRecord(entry));
+    list.append(card);
+  });
+}
+
+for (const [button, offset] of [["#kickboxing-prev", -1], ["#kickboxing-next", 1]]) {
+  $(button).addEventListener("click", () => {
+    ui.kickboxingDate = addDays(ui.kickboxingDate, offset);
+    renderKickboxing();
+  });
+}
+$("#btn-add-kickboxing").addEventListener("click", () => openKickboxingRecord());
+
+async function openKickboxingRecord(entry) {
+  const date = ui.kickboxingDate;
+  const originalState = state;
+  const form = el(`<form>
+    <h3>キックボクシング · ${fmtDateJP(date)}</h3>
+    <div id="kickboxing-preview"></div>
+    <label>練習動画（任意・250MBまで）
+      <input class="input" name="video" type="file" accept="video/*">
+    </label>
+    <label>練習内容
+      <textarea class="input" name="practice" rows="3" maxlength="4000" placeholder="ミット打ち、スパーリングなど">${esc(entry?.practice || "")}</textarea>
+    </label>
+    <label>フィードバック・次回の課題
+      <textarea class="input" name="feedback" rows="4" maxlength="4000" placeholder="コーチからの助言、自分で気づいた点など">${esc(entry?.feedback || "")}</textarea>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost">閉じる</button>
+      <button type="submit" class="btn-primary">保存する</button>
+    </div>
+  </form>`);
+  openModal("").append(form);
+  const isOpen = () => form.isConnected && !$("#modal-backdrop").hidden;
+  form.querySelector(".btn-ghost").addEventListener("click", closeModal);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state !== originalState) {
+      toast("記録が更新されました。開き直してください");
+      return;
+    }
+    const file = form.elements.video.files[0];
+    const practice = form.elements.practice.value.trim();
+    const feedback = form.elements.feedback.value.trim();
+    if (!file && !entry?.videoKey && !practice && !feedback) {
+      toast("動画かメモを追加してください");
+      return;
+    }
+    const error = file && videoFileError(file);
+    if (error) { toast(error); return; }
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    const videoKey = file ? `kickboxing-${uid()}` : entry?.videoKey;
+    try {
+      if (file) await saveExerciseVideo(videoKey, file);
+      if (!isOpen() || state !== originalState) {
+        if (file) await deleteExerciseVideo(videoKey);
+        if (isOpen()) toast("記録が更新されました。開き直してください");
+        return;
+      }
+      const previous = state.kickboxing[date];
+      const record = { id: entry?.id || uid(), practice, feedback };
+      if (videoKey) Object.assign(record, { videoKey, videoName: file?.name || entry.videoName });
+      state.kickboxing[date] = entry
+        ? (previous || []).map(item => item.id === entry.id ? record : item)
+        : [...(previous || []), record];
+      if (!save()) {
+        if (previous) state.kickboxing[date] = previous;
+        else delete state.kickboxing[date];
+        if (file) await deleteExerciseVideo(videoKey);
+        toast("保存できませんでした。端末の空き容量を確認してください");
+        return;
+      }
+      if (file && entry?.videoKey) deleteExerciseVideo(entry.videoKey).catch(console.warn);
+      closeModal();
+      renderKickboxing();
+      toast("練習記録を保存しました");
+    } catch (error) {
+      console.warn(error);
+      toast("動画を保存できませんでした。端末の空き容量を確認してください");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  if (entry?.videoKey) {
+    const preview = form.querySelector("#kickboxing-preview");
+    try {
+      const video = await getExerciseVideo(entry.videoKey);
+      if (!isOpen()) return;
+      if (video) {
+        activeVideoUrl = URL.createObjectURL(video);
+        preview.append(el(`<video class="form-video" src="${activeVideoUrl}" controls playsinline preload="metadata"></video>`));
+      } else {
+        preview.textContent = "登録した動画は保存元の端末で再生できます";
+      }
+    } catch {
+      if (isOpen()) preview.textContent = "動画を読み込めませんでした";
+    }
+  }
+}
+
 /* ================= 食事 ================= */
+const SMOOTHIE = {
+  name: "朝のスムージー",
+  note: "バナナ 1本\nベリー 2〜3g\nアーモンドミルク（量は任意で入力）\nクレアチン スプーン山盛り1杯",
+};
+const MALATANG = { name: "マーラータン（麻辣湯）", note: "" };
 function renderMeals() {
   $("#meal-date-label").textContent = fmtDateJP(ui.mealDate);
 
@@ -2097,8 +2227,8 @@ function renderMeals() {
     </div>`);
     items.forEach((item, i) => {
       const row = el(`<div class="meal-item">
-        <span class="m-name">${esc(item.name)}${item.grams ? ` <small style="color:#999">${item.grams}g</small>` : ""}</span>
-        <span class="m-detail">${Math.round(item.kcal)}kcal P${round1(item.p)} F${round1(item.f)} C${round1(item.c)}</span>
+        <span class="m-name">${esc(item.name)}${item.grams ? ` <small style="color:#999">${item.grams}g</small>` : ""}${item.note ? `<small class="meal-item-note">${esc(item.note)}</small>` : ""}</span>
+        <span class="m-detail">${item.nutritionUnknown ? "栄養値未入力" : `${Math.round(item.kcal)}kcal P${round1(item.p)} F${round1(item.f)} C${round1(item.c)}`}</span>
         <button class="del-btn" title="削除">✕</button>
       </div>`);
       row.querySelector(".del-btn").addEventListener("click", () => {
@@ -2109,6 +2239,13 @@ function renderMeals() {
       });
       sec.appendChild(row);
     });
+    const presets = el('<div class="meal-preset-actions"></div>');
+    for (const preset of mt.key === "breakfast" ? [SMOOTHIE, MALATANG] : [MALATANG]) {
+      const button = el(`<button type="button" class="btn-outline">＋ ${esc(preset.name)}</button>`);
+      button.addEventListener("click", () => openManualFoodModal(mt, preset));
+      presets.append(button);
+    }
+    sec.appendChild(presets);
     const addRow = el(`<div class="meal-add-row"><button>＋ 食品を追加</button></div>`);
     addRow.querySelector("button").addEventListener("click", () => openFoodModal(mt));
     sec.appendChild(addRow);
@@ -2191,25 +2328,30 @@ function openPortionModal(mt, food) {
   gIn.select();
 }
 
-function openManualFoodModal(mt) {
+function openManualFoodModal(mt, preset = null) {
   const box = openModal(`
     <h3>手入力で追加（${mt.label}）</h3>
     <div class="form-row wrap">
       <label style="flex-basis:100%">名前<input type="text" id="mf-name" class="input" placeholder="例: コンビニ弁当"></label>
+      ${preset ? '<label style="flex-basis:100%">材料・量のメモ<textarea id="mf-note" class="input" rows="4"></textarea></label>' : ""}
       <label>カロリー (kcal)<input type="number" id="mf-kcal" class="input" inputmode="decimal"></label>
       <label>タンパク質 (g)<input type="number" id="mf-p" class="input" inputmode="decimal"></label>
       <label>脂質 (g)<input type="number" id="mf-f" class="input" inputmode="decimal"></label>
       <label>炭水化物 (g)<input type="number" id="mf-c" class="input" inputmode="decimal"></label>
       <label>量 (g・任意)<input type="number" id="mf-g" class="input" inputmode="decimal"></label>
     </div>
-    <label style="font-size:.85rem;display:flex;gap:6px;align-items:center">
+    ${preset ? '<p class="hint">栄養値はわかる分だけ入力できます。空欄は集計に含めません。</p>' : `<label style="font-size:.85rem;display:flex;gap:6px;align-items:center">
       <input type="checkbox" id="mf-save"> 食品リストに保存する（量gの入力が必要）
-    </label>
+    </label>`}
     <div class="modal-actions">
       <button class="btn-ghost" id="mf-cancel">戻る</button>
       <button class="btn-primary" id="mf-ok">追加する</button>
     </div>`);
-  box.querySelector("#mf-cancel").addEventListener("click", () => openFoodModal(mt));
+  if (preset) {
+    box.querySelector("#mf-name").value = preset.name;
+    box.querySelector("#mf-note").value = preset.note;
+  }
+  box.querySelector("#mf-cancel").addEventListener("click", () => preset ? closeModal() : openFoodModal(mt));
   box.querySelector("#mf-ok").addEventListener("click", () => {
     const name = box.querySelector("#mf-name").value.trim();
     const kcal = Number(box.querySelector("#mf-kcal").value) || 0;
@@ -2218,8 +2360,14 @@ function openManualFoodModal(mt) {
     const c = Number(box.querySelector("#mf-c").value) || 0;
     const g = Number(box.querySelector("#mf-g").value) || 0;
     if (!name) { toast("名前を入力してください"); return; }
-    addMealItem(mt.key, { id: uid(), name, grams: g || null, kcal, p, f, c });
-    if (box.querySelector("#mf-save").checked && g > 0) {
+    const item = { id: uid(), name, grams: g || null, kcal, p, f, c };
+    if (preset) {
+      item.note = box.querySelector("#mf-note").value.trim();
+      item.nutritionUnknown = ["#mf-kcal", "#mf-p", "#mf-f", "#mf-c"]
+        .every(id => box.querySelector(id).value === "");
+    }
+    addMealItem(mt.key, item);
+    if (box.querySelector("#mf-save")?.checked && g > 0) {
       const k = 100 / g;
       state.customFoods.unshift({
         name, kcal: round1(kcal * k), p: round1(p * k), f: round1(f * k), c: round1(c * k), unit: g,
@@ -2536,7 +2684,7 @@ initCloudSync({
   },
   onConflict: info => {
     const describe = summary => summary
-      ? `筋トレ ${summary.workoutDays}日・食事 ${summary.mealDays}日・体組成 ${summary.bodyDays}日・ラン ${summary.runDays}日${summary.latestDate ? `（最終 ${summary.latestDate}）` : ""}`
+      ? `筋トレ ${summary.workoutDays}日・食事 ${summary.mealDays}日・体組成 ${summary.bodyDays}日・ラン ${summary.runDays}日・キックボクシング ${summary.kickboxingDays}日${summary.latestDate ? `（最終 ${summary.latestDate}）` : ""}`
       : "保存データなし";
 
     if (!info.remoteExists) {
