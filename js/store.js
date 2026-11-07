@@ -22,6 +22,7 @@ function defaults() {
     body: {},
     // runs: { "YYYY-MM-DD": [ {id, distance, durationSec, paceSec, memo} ] }
     runs: {},
+    kickboxing: {},
     // 動画本体は IndexedDB。ここには表示用メタデータのみ保存する
     exerciseVideos: {},
     customFoods: [],
@@ -52,6 +53,10 @@ export function normalizeState(value) {
     meals: value.meals && typeof value.meals === "object" ? value.meals : {},
     body: value.body && typeof value.body === "object" ? value.body : {},
     runs: value.runs && typeof value.runs === "object" ? value.runs : {},
+    kickboxing: Object.fromEntries(Object.entries(value.kickboxing || {})
+      .filter(([, entries]) => Array.isArray(entries))
+      .map(([date, entries]) => [date, entries.filter(entry => entry && typeof entry.id === "string")])
+      .filter(([, entries]) => entries.length)),
     exerciseVideos: value.exerciseVideos && typeof value.exerciseVideos === "object"
       ? value.exerciseVideos
       : {},
@@ -142,6 +147,8 @@ export function replaceStateFromCloud(value) {
 export function toCloudSnapshot(value = state) {
   const snapshot = clone(normalizeState(value));
   snapshot.exerciseVideos = {};
+  // Keep existing sync fingerprints stable until a kickboxing record is added.
+  if (!Object.keys(snapshot.kickboxing).length) delete snapshot.kickboxing;
   if (snapshot.advice) snapshot.advice.accountEmail = "";
   return snapshot;
 }
@@ -157,6 +164,7 @@ export function hasMeaningfulData(value = state) {
     || Object.keys(normalized.meals).length > 0
     || Object.keys(normalized.body).length > 0
     || Object.keys(normalized.runs).length > 0
+    || Object.keys(normalized.kickboxing).length > 0
     || normalized.customFoods.length > 0
     || !sameJSON(normalized.parts, DEFAULT_PARTS)
     || !sameJSON(normalized.exercises, DEFAULT_EXERCISES)
@@ -178,12 +186,13 @@ export function summarizeState(value = state) {
   const runDays = Object.keys(normalized.runs).filter(key =>
     Array.isArray(normalized.runs[key]) && normalized.runs[key].length
   );
-  const dates = [...workoutDays, ...mealDays, ...bodyDays, ...runDays].sort();
+  const dates = [...workoutDays, ...mealDays, ...bodyDays, ...runDays, ...Object.keys(normalized.kickboxing)].sort();
   return {
     workoutDays: workoutDays.length,
     mealDays: mealDays.length,
     bodyDays: bodyDays.length,
     runDays: runDays.length,
+    kickboxingDays: Object.keys(normalized.kickboxing).length,
     latestDate: dates.at(-1) || null,
   };
 }
