@@ -116,6 +116,7 @@ body {
 .entry-choice:active { transform: translateY(1px); background: var(--accent-pale); }
 .entry-choice:focus-visible { outline: 3px solid #ffd54f; outline-offset: 2px; }
 .entry-choice.run { --accent: var(--green); --accent-pale: #e8f5ee; }
+.entry-choice.kickboxing { --accent: #9b3a27; --accent-pale: #fbece7; }
 .entry-choice.stretch { --accent: var(--blue); --accent-pale: #e8eaf6; }
 .entry-choice-icon {
   width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
@@ -504,6 +505,9 @@ body {
 }
 
 .video-modal-body { min-height: 150px; }
+.kickboxing-note, .meal-item .meal-item-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.meal-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+.meal-item .meal-item-note { display: block; }
 .form-video { display: block; width: 100%; max-height: 52vh; background: #111; border-radius: 12px; }
 .video-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; color: var(--text-sub); gap: 8px; }
 .video-empty span { font-size: 2.8rem; }
