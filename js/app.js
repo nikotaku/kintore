@@ -2205,6 +2205,7 @@ const SMOOTHIE = {
   note: "バナナ 1本\nベリー 2〜3g\nアーモンドミルク（量は任意で入力）\nクレアチン スプーン山盛り1杯",
 };
 const MALATANG = { name: "マーラータン（麻辣湯）", note: "" };
+const STEAK = { name: "ステーキ", note: "" };
 function renderMeals() {
   $("#meal-date-label").textContent = fmtDateJP(ui.mealDate);
 
@@ -2240,7 +2241,7 @@ function renderMeals() {
       sec.appendChild(row);
     });
     const presets = el('<div class="meal-preset-actions"></div>');
-    for (const preset of mt.key === "breakfast" ? [SMOOTHIE, MALATANG] : [MALATANG]) {
+    for (const preset of mt.key === "breakfast" ? [SMOOTHIE, MALATANG, STEAK] : [MALATANG, STEAK]) {
       const button = el(`<button type="button" class="btn-outline">＋ ${esc(preset.name)}</button>`);
       button.addEventListener("click", () => openManualFoodModal(mt, preset));
       presets.append(button);
@@ -2333,7 +2334,7 @@ function openManualFoodModal(mt, preset = null) {
     <h3>手入力で追加（${mt.label}）</h3>
     <div class="form-row wrap">
       <label style="flex-basis:100%">名前<input type="text" id="mf-name" class="input" placeholder="例: コンビニ弁当"></label>
-      ${preset ? '<label style="flex-basis:100%">材料・量のメモ<textarea id="mf-note" class="input" rows="4"></textarea></label>' : ""}
+      ${preset ? '<label style="flex-basis:100%">材料・量のメモ<textarea id="mf-note" class="input" rows="4" placeholder="部位・具材など"></textarea></label>' : ""}
       <label>カロリー (kcal)<input type="number" id="mf-kcal" class="input" inputmode="decimal"></label>
       <label>タンパク質 (g)<input type="number" id="mf-p" class="input" inputmode="decimal"></label>
       <label>脂質 (g)<input type="number" id="mf-f" class="input" inputmode="decimal"></label>
