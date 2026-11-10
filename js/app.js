@@ -403,58 +403,8 @@ function renderHome() {
   $("#month-days").textContent = [...workoutKeys].filter(k => k.startsWith(monthPrefix)).length;
   $("#total-days").textContent = workoutKeys.size;
 
-  // 選択日のワークアウト一覧
-  $("#home-date-heading").textContent = `📋 ${fmtDateJP(ui.selectedDate)} のトレーニング`;
-  const list = $("#home-workout-list");
-  const entries = state.workouts[ui.selectedDate] || [];
-  if (!entries.length) {
-    list.innerHTML = `<div class="empty-note">まだ記録がありません。<br>上の「ウェイト」から始めましょう💪</div>`;
-  } else {
-    list.innerHTML = "";
-    for (const en of entries) {
-      const card = el(`<div class="wo-card">
-        <div class="wo-card-head">
-          <span class="wo-card-name">${esc(entryName(en))}</span>
-          <span class="wo-card-rm">RM : ${round1(bestRM(en)).toFixed(1)}kg</span>
-        </div>
-        ${en.sets.map((s, i) => `<div class="wo-set-line"><span class="idx">${i + 1}</span> ${Number(s.w) || 0} kg × ${Number(s.r) || 0} reps</div>`).join("")}
-      </div>`);
-      card.addEventListener("click", () => { ui.workoutDate = ui.selectedDate; showView("workout"); });
-      list.appendChild(card);
-    }
-  }
-
-  // 選択日のランニング
-  const dayRuns = runsForDay(ui.selectedDate);
-  const runWrap = $("#home-running-summary");
-  if (!dayRuns.length) {
-    runWrap.innerHTML = `<div class="summary-empty">まだ記録がありません</div>
-      <button class="btn-outline full" id="btn-home-run">ランニングを記録する</button>`;
-  } else {
-    const distance = runDistance(ui.selectedDate);
-    const duration = dayRuns.reduce((sum, run) => sum + (Number(run.durationSec) || 0), 0);
-    const pace = distance ? duration / distance : 0;
-    runWrap.innerHTML = `<div class="running-summary-main">
-        <strong>${formatDistance(distance)} km</strong>
-        <span>${formatDuration(duration)}</span>
-        <span>${formatPace(pace)} /km</span>
-      </div>
-      <button class="btn-outline full" id="btn-home-run">記録を確認・追加</button>`;
-  }
-  $("#btn-home-run").addEventListener("click", () => {
-    ui.runDate = ui.selectedDate;
-    showView("running");
-  });
-  $("#btn-share-day").disabled = !buildDaySummary(state, ui.selectedDate).hasContent;
-
-  // 食事サマリ
-  const tot = mealDayTotals(ui.selectedDate);
-  const tg = state.targets;
-  $("#home-meal-summary").innerHTML = `
-    <div class="kcal-line">${Math.round(tot.kcal)} kcal <small>/ ${tg.kcal} kcal</small></div>
-    ${macroBars(tot, tg)}
-    <button class="btn-outline full" id="btn-goto-meals">🍽 食事を記録する</button>`;
-  $("#btn-goto-meals").addEventListener("click", () => { ui.mealDate = ui.selectedDate; showView("meals"); });
+  // この日の記録をシェアできるか
+  $("#btn-share-day").hidden = !buildDaySummary(state, ui.selectedDate).hasContent;
 }
 
 function macroBars(tot, tg) {
