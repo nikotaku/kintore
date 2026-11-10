@@ -23,7 +23,7 @@ test("guide open and back controls are wired without adding another bottom tab",
   assert.match(app, /btn-running-guide"\)\.addEventListener\("click", \(\) => \{[\s\S]*?showViewAndFocus\("running-guide", "#running-guide-title"\);[\s\S]*?\}\)/);
   assert.match(app, /btn-running-guide-back"\)\.addEventListener\("click", \(\) => showViewAndFocus\("running", "#btn-running-guide"\)\)/);
   assert.match(app, /btn-running-guide-done"\)\.addEventListener\("click", \(\) => showViewAndFocus\("running", "#btn-running-guide"\)\)/);
-  assert.match(app, /name === "running-guide" \? "running" : name/);
+  assert.match(app, /name === "running-guide" \? "running" : name === "core" \? "home" : name/);
   assert.match(html, /id="running-guide-title" tabindex="-1"/);
   assert.equal((html.match(/class="nav-item/g) || []).length, 5);
 });
@@ -37,7 +37,7 @@ test("guide has local offline-friendly visuals and accessible references", () =>
 });
 
 test("service worker cache is bumped for the new HTML, CSS and behavior", () => {
-  assert.match(serviceWorker, /kintore-memo-v12/);
+  assert.match(serviceWorker, /kintore-memo-v13/);
   for (const asset of ["index.html", "css/style.css", "js/app.js"]) {
     assert.ok(serviceWorker.includes(`"${asset}"`), `${asset} should be precached`);
   }

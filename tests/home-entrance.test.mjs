@@ -18,9 +18,12 @@ test("home opens with a date field that is auto-filled with today", () => {
 });
 
 test("home entrance offers kickboxing immediately below running", () => {
-  const order = ["btn-entry-run", "btn-entry-kickboxing", "btn-entry-stretch", "btn-entry-weight"].map(id => homeHtml.indexOf(`id="${id}"`));
-  assert.ok(order.every(index => index > 0), "all four entrance buttons exist");
+  const order = ["btn-entry-stretch", "btn-entry-run", "btn-entry-kickboxing", "btn-entry-weight", "btn-entry-core"]
+    .map(id => homeHtml.indexOf(`id="${id}"`));
+  assert.ok(order.every(index => index > 0), "all five entrance buttons exist");
   assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.ok(homeHtml.indexOf('id="btn-entry-stretch"') < homeHtml.indexOf('id="btn-entry-run"'),
+    "stretch sits above running");
   assert.ok(homeHtml.indexOf('id="home-date"') < order[0], "date comes before the menu buttons");
   assert.doesNotMatch(html, /id="btn-add-training"|id="btn-quick-run"/);
 });
@@ -35,6 +38,7 @@ test("each entrance opens its own screen for the selected date", () => {
 test("stretch screen lists registered stretch videos stored on the device", () => {
   assert.match(html, /id="view-stretch"/);
   assert.match(html, /id="stretch-list"/);
+  assert.match(html, /id="stretch-guide-list"/);
   assert.match(html, /id="btn-add-stretch"/);
   assert.match(app, /const STRETCH_PART = "ストレッチ";/);
   assert.match(app, /getExerciseVideo\(stretch\.id\)/);

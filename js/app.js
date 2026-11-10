@@ -13,6 +13,19 @@ import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
 import { buildDaySummary, formatShareText, drawShareCard, canvasToFile, shareUrls } from "./share.js";
 import { formatAIContext } from "./ai-context.js";
+import { STRETCH_GUIDE, STRETCH_GUIDE_NOTE } from "./stretch-guide.js";
+import {
+  CORE_GUIDE,
+  CORE_MENU,
+  CORE_PATTERNS,
+  CORE_TARGETS,
+  coreClock,
+  coreMenuForTarget,
+  coreSessionSteps,
+  coreSessionTotalSec,
+  coreTargetLabel,
+  coreTargetsLabel,
+} from "./core-menu.js";
 import {
   GroupError,
   GROUP_POST_WINDOW_DAYS,
@@ -60,6 +73,7 @@ const ui = {
   kickboxingDate: todayKey(),
   runTipOffset: 0,
   runDrafts: {},              // 日付ごとの未保存入力（ガイド往復・再描画で保持）
+  coreFilter: "ALL",          // 腹筋メニューの部位フィルター
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
@@ -228,15 +242,17 @@ function mealDayTotals(key) {
 function showView(name) {
   // 非表示にした動画が裏で再生され続けないよう、ストレッチ画面を離れたら破棄する
   if (ui.view === "stretch" && name !== "stretch") releaseStretchVideos();
+  // 腹筋ガイドのタイマーは画面を離れたら止める（裏でカウントし続けない）
+  if (ui.view === "core" && name !== "core") stopCoreSession({ silent: true });
   if (name !== "group") groupRenderToken += 1;
   ui.view = name;
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
-  const activeNav = name === "running-guide" ? "running" : name;
+  const activeNav = name === "running-guide" ? "running" : name === "core" ? "home" : name;
   document.querySelectorAll(".nav-item").forEach(b => {
     b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, kickboxing: renderKickboxing, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, kickboxing: renderKickboxing, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup, core: renderCore };
   renderers[name]?.();
 }
 
@@ -328,7 +344,9 @@ function renderHomeEntry() {
   $("#btn-entry-kickboxing").classList.toggle("done", kickboxingCount > 0);
 
   const stretchCount = stretchList().length;
-  $("#entry-stretch-status").textContent = stretchCount ? `登録した${stretchCount}件の動画を見る` : "動画を登録してはじめる";
+  $("#entry-stretch-status").textContent = stretchCount
+    ? `胸椎ストレッチ3種・登録${stretchCount}件`
+    : "胸椎ストレッチ3種のアニメーション";
 
   const exerciseCount = (state.workouts[key] || []).length;
   $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "種目・重量を記録";
@@ -912,7 +930,28 @@ function stretchCard(id) {
   return [...document.querySelectorAll("#stretch-list .stretch-card")].find(card => card.dataset.stretchId === id);
 }
 
+function renderStretchGuide() {
+  const list = $("#stretch-guide-list");
+  if (!list || list.dataset.ready === "1") return;
+  list.innerHTML = STRETCH_GUIDE.map((guide, index) => `<article class="stretch-guide-card" style="animation-delay:${index * 90}ms">
+      <div class="stretch-guide-visual">${guide.svg}</div>
+      <div class="stretch-guide-body">
+        <div class="stretch-guide-title">
+          <span class="stretch-guide-no">${String(guide.no).padStart(2, "0")}</span>
+          <h3>${esc(guide.name)}</h3>
+          <span class="stretch-guide-time">${guide.seconds}秒 × ${esc(guide.sides)}</span>
+        </div>
+        <p class="stretch-guide-purpose">${esc(guide.purpose)}</p>
+        <p class="stretch-guide-how">${esc(guide.how)}</p>
+        <ul class="stretch-guide-points">${guide.points.map(point => `<li>${esc(point)}</li>`).join("")}</ul>
+      </div>
+    </article>`).join("");
+  list.dataset.ready = "1";
+  $("#stretch-guide-note").textContent = STRETCH_GUIDE_NOTE;
+}
+
 function renderStretch() {
+  renderStretchGuide();
   releaseStretchVideos();
   const token = stretchRenderToken;
   const wrap = $("#stretch-list");
@@ -2054,6 +2093,178 @@ $("#btn-running-guide").addEventListener("click", () => {
 });
 $("#btn-running-guide-back").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
 $("#btn-running-guide-done").addEventListener("click", () => showViewAndFocus("running", "#btn-running-guide"));
+/* ================= 腹筋トレーニング（15種目・15分） ================= */
+const CORE_STEPS = coreSessionSteps();
+let coreSession = null; // { step, remain, endsAt, running, timerId }
+
+function coreCardHTML(exercise) {
+  return `<article class="core-card">
+    <span class="core-card-no" aria-hidden="true">${String(exercise.no).padStart(2, "0")}</span>
+    <div class="core-card-head">
+      <h3>${esc(exercise.name)}</h3>
+      <span class="core-tag">${esc(coreTargetsLabel(exercise))}</span>
+    </div>
+    <div class="core-card-fig" aria-hidden="true">${CORE_PATTERNS[exercise.pattern]}</div>
+    <p class="core-card-how">${esc(exercise.how)}</p>
+    <p class="core-card-point"><span>コツ</span>${esc(exercise.point)}</p>
+  </article>`;
+}
+
+function renderCore() {
+  $("#core-lead").textContent = CORE_GUIDE.lead;
+  const cautions = $("#core-cautions");
+  if (!cautions.childElementCount) {
+    cautions.innerHTML = CORE_GUIDE.cautions.map(text => `<li>${esc(text)}</li>`).join("");
+  }
+  $("#core-filters").innerHTML = ["ALL", ...CORE_TARGETS].map(target => `
+    <button type="button" class="core-filter" data-target="${esc(target)}" aria-pressed="${target === ui.coreFilter}">
+      ${esc(coreTargetLabel(target))}
+    </button>`).join("");
+  const items = coreMenuForTarget(ui.coreFilter);
+  $("#core-count").textContent = `${items.length}種目を表示 / 全${CORE_MENU.length}種目`;
+  $("#core-list").innerHTML = items.map(coreCardHTML).join("");
+  if (coreSession) renderCoreSession();
+}
+
+function coreRemainingSec() {
+  if (!coreSession) return coreSessionTotalSec();
+  return CORE_STEPS.slice(coreSession.step)
+    .reduce((sum, step, offset) => sum + (offset === 0 ? coreSession.remain : step.seconds), 0);
+}
+
+function renderCoreSession() {
+  if (!coreSession) return;
+  const step = CORE_STEPS[coreSession.step];
+  const exercise = CORE_MENU[step.index];
+  const next = CORE_MENU[step.index + 1];
+  $("#core-session").hidden = false;
+  $("#core-session-remaining").textContent = coreClock(coreRemainingSec());
+  $("#core-timer-value").textContent = String(coreSession.remain);
+  const phase = $("#core-session-phase");
+  phase.textContent = step.kind === "work" ? "実施" : "休憩";
+  phase.classList.toggle("rest", step.kind === "rest");
+  $("#core-session-no").textContent = String(exercise.no).padStart(2, "0");
+  $("#core-session-name").textContent = exercise.name;
+  $("#core-session-target").textContent = coreTargetsLabel(exercise);
+  $("#core-session-how").textContent = step.kind === "work"
+    ? exercise.how
+    : next
+      ? `休憩。次は「${next.name}」`
+      : "最後の休憩です。ここまでできたら完了を押しましょう。";
+  $("#core-session-count").textContent = `種目 ${exercise.no} / ${CORE_MENU.length}`;
+  $("#core-progress-fill").style.width = `${((coreSession.step + 1) / CORE_STEPS.length) * 100}%`;
+  $("#btn-core-session-toggle").textContent = coreSession.running ? "一時停止" : "再開";
+  const workLeft = CORE_STEPS.slice(coreSession.step + 1).some(item => item.kind === "work");
+  $("#btn-core-session-next").textContent = workLeft ? "次の種目へ" : "完了";
+}
+
+function coreTimerStart() {
+  if (!coreSession) return;
+  clearInterval(coreSession.timerId);
+  coreSession.timerId = setInterval(coreSessionTick, 250);
+}
+
+function coreTimerStop() {
+  if (!coreSession) return;
+  clearInterval(coreSession.timerId);
+  coreSession.timerId = null;
+}
+
+function startCoreSession() {
+  stopCoreSession({ silent: true });
+  coreSession = {
+    step: 0,
+    remain: CORE_STEPS[0].seconds,
+    endsAt: Date.now() + CORE_STEPS[0].seconds * 1000,
+    running: true,
+    timerId: null,
+  };
+  renderCoreSession();
+  coreTimerStart();
+  $("#core-session").scrollIntoView({ block: "start", behavior: "smooth" });
+  $("#btn-core-session-toggle").focus({ preventScroll: true });
+}
+
+function stopCoreSession({ silent = false } = {}) {
+  if (!coreSession) return;
+  coreTimerStop();
+  coreSession = null;
+  const panel = $("#core-session");
+  if (panel) panel.hidden = true;
+  if (!silent) toast("ガイドを終了しました");
+}
+
+function toggleCoreSession() {
+  if (!coreSession) return;
+  if (coreSession.running) {
+    coreSession.remain = Math.max(1, Math.ceil((coreSession.endsAt - Date.now()) / 1000));
+    coreSession.running = false;
+    coreTimerStop();
+  } else {
+    coreSession.running = true;
+    coreSession.endsAt = Date.now() + coreSession.remain * 1000;
+    coreTimerStart();
+  }
+  renderCoreSession();
+}
+
+function coreSessionTick() {
+  if (!coreSession?.running) return;
+  const remain = Math.ceil((coreSession.endsAt - Date.now()) / 1000);
+  if (remain > 0) {
+    if (remain !== coreSession.remain) {
+      coreSession.remain = remain;
+      renderCoreSession();
+    }
+    return;
+  }
+  // 実施 → 休憩 → 次の種目。最後の種目が終わったら完了
+  if (coreSession.step >= CORE_STEPS.length - 1) {
+    finishCoreSession();
+    return;
+  }
+  coreSession.step += 1;
+  coreSession.remain = CORE_STEPS[coreSession.step].seconds;
+  coreSession.endsAt = Date.now() + coreSession.remain * 1000;
+  renderCoreSession();
+}
+
+function nextCoreExercise() {
+  if (!coreSession) return;
+  let next = coreSession.step + 1;
+  // 休憩は自動で進むため、「次の種目へ」は休憩を飛ばして実施から始める
+  while (next < CORE_STEPS.length && CORE_STEPS[next].kind === "rest") next += 1;
+  if (next >= CORE_STEPS.length) {
+    finishCoreSession();
+    return;
+  }
+  coreSession.step = next;
+  coreSession.remain = CORE_STEPS[next].seconds;
+  coreSession.endsAt = Date.now() + coreSession.remain * 1000;
+  coreSession.running = true;
+  coreTimerStart();
+  renderCoreSession();
+}
+
+function finishCoreSession() {
+  stopCoreSession({ silent: true });
+  toast("15種目 完了！おつかれさまでした");
+  $("#core-list").scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+$("#btn-entry-core").addEventListener("click", () => showViewAndFocus("core", "#core-title"));
+$("#btn-core-back").addEventListener("click", () => showViewAndFocus("home", "#btn-entry-core"));
+$("#btn-core-start").addEventListener("click", startCoreSession);
+$("#btn-core-session-close").addEventListener("click", () => stopCoreSession());
+$("#btn-core-session-toggle").addEventListener("click", toggleCoreSession);
+$("#btn-core-session-next").addEventListener("click", nextCoreExercise);
+$("#core-filters").addEventListener("click", event => {
+  const button = event.target.closest("[data-target]");
+  if (!button) return;
+  ui.coreFilter = button.dataset.target;
+  renderCore();
+  $(`#core-filters [data-target="${ui.coreFilter}"]`)?.focus({ preventScroll: true });
+});
 $("#run-prev").addEventListener("click", () => {
   ui.runDate = addDays(ui.runDate, -1);
   ui.runTipOffset = 0;
