@@ -18,10 +18,12 @@ test("home opens with a date field that is auto-filled with today", () => {
 });
 
 test("home entrance offers kickboxing immediately below running", () => {
-  const order = ["btn-entry-stretch", "btn-entry-run", "btn-entry-kickboxing", "btn-entry-weight", "btn-entry-core"]
+  const order = ["btn-entry-stretch", "btn-entry-run", "btn-entry-kickboxing", "btn-entry-weight"]
     .map(id => homeHtml.indexOf(`id="${id}"`));
-  assert.ok(order.every(index => index > 0), "all five entrance buttons exist");
+  assert.ok(order.every(index => index > 0), "all four entrance buttons exist");
   assert.deepEqual([...order].sort((a, b) => a - b), order);
+  // 腹筋はウェイトの中（部位の分岐）へ移動した
+  assert.doesNotMatch(homeHtml, /id="btn-entry-core"/);
   assert.ok(homeHtml.indexOf('id="btn-entry-stretch"') < homeHtml.indexOf('id="btn-entry-run"'),
     "stretch sits above running");
   assert.ok(homeHtml.indexOf('id="home-date"') < order[0], "date comes before the menu buttons");
@@ -31,7 +33,7 @@ test("home entrance offers kickboxing immediately below running", () => {
 test("each entrance opens its own screen for the selected date", () => {
   assert.match(app, /btn-entry-run"\)\.addEventListener\("click", \(\) => \{\s*ui\.runDate = ui\.selectedDate;\s*showView\("running"\);/);
   assert.match(app, /btn-entry-stretch"\)\.addEventListener\("click", \(\) => showView\("stretch"\)\)/);
-  assert.match(app, /btn-entry-weight"\)[\s\S]*?ui\.pickerDate = key;[\s\S]*?showView\("picker"\);/);
+  assert.match(app, /btn-entry-weight"\)\.addEventListener\("click", \(\) => \{\s*ui\.pickerDate = ui\.selectedDate;[\s\S]*?showView\("parts"\);/);
   assert.match(app, /stretch: renderStretch/);
 });
 

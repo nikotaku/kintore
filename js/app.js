@@ -61,7 +61,6 @@ import {
 /* ================= グローバルUI状態 ================= */
 const ui = {
   view: "home",
-  homeMonth: new Date(),      // ホームのカレンダー表示月
   selectedDate: todayKey(),   // ホームで選択中の日付（起動時は今日を自動入力）
   homeDateFollowsToday: true, // 今日を選択中なら日付が変わったときに追従する
   historyMonth: new Date(),
@@ -77,7 +76,9 @@ const ui = {
   workoutDate: todayKey(),    // ワークアウト詳細の対象日
   pickerDate: todayKey(),
   pickerFrom: "home",         // picker の戻り先
+  pickerPart: null,           // picker で絞り込む部位（null はすべて）
   pickerEdit: false,
+  coreFrom: "picker",         // 腹筋メニューの戻り先
   groupMemberId: null,        // 表示中のグループ（この端末の参加情報のID）
   groupWeek: null,            // グループ画面で表示中の週（月曜のキー）
 };
@@ -158,16 +159,16 @@ function entryName(en) {
   return exName(en.exerciseId) || en.name || "（削除された種目）";
 }
 
-function rangeVolume(fromKey, toKey) {
+function rangeVolume(fromKey, toKey, part = "ALL") {
   let v = 0;
   for (const key of Object.keys(state.workouts)) {
-    if (key >= fromKey && key <= toKey) v += dayVolume(key);
+    if (key >= fromKey && key <= toKey) v += dayVolume(key, part);
   }
   return v;
 }
 
-function totalVolume() {
-  return Object.keys(state.workouts).reduce((a, k) => a + dayVolume(k), 0);
+function totalVolume(part = "ALL") {
+  return Object.keys(state.workouts).reduce((a, k) => a + dayVolume(k, part), 0);
 }
 
 function workoutDays() {
@@ -247,12 +248,12 @@ function showView(name) {
   if (name !== "group") groupRenderToken += 1;
   ui.view = name;
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
-  const activeNav = name === "running-guide" ? "running" : name === "core" ? "home" : name;
+  const activeNav = name === "running-guide" ? "running" : name === "core" || name === "parts" ? "home" : name;
   document.querySelectorAll(".nav-item").forEach(b => {
     b.classList.toggle("active", b.dataset.view === activeNav);
   });
   window.scrollTo(0, 0);
-  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, kickboxing: renderKickboxing, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup, core: renderCore };
+  const renderers = { home: renderHome, history: renderHistory, running: renderRunning, kickboxing: renderKickboxing, meals: renderMeals, body: renderBody, settings: renderSettings, picker: renderPicker, workout: renderWorkout, stretch: renderStretch, groups: renderGroups, group: renderGroup, core: renderCore, parts: renderParts };
   renderers[name]?.();
 }
 
@@ -317,8 +318,6 @@ const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 function selectHomeDate(key) {
   ui.selectedDate = key;
   ui.homeDateFollowsToday = key === todayKey();
-  const d = parseKey(key);
-  ui.homeMonth = new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 function previousWorkoutDate(key) {
@@ -349,7 +348,7 @@ function renderHomeEntry() {
     : "胸椎ストレッチ3種のアニメーション";
 
   const exerciseCount = (state.workouts[key] || []).length;
-  $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "種目・重量を記録";
+  $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "部位を選んで種目・重量を記録";
   $("#btn-entry-weight").classList.toggle("done", exerciseCount > 0);
 
   const groupCount = loadMemberships().length;
@@ -357,52 +356,7 @@ function renderHomeEntry() {
 }
 
 function renderHome() {
-  const workoutKeys = new Set(workoutDays());
   renderHomeEntry();
-
-  // カレンダー
-  const m = ui.homeMonth;
-  renderCalendar($("#home-calendar"), m, {
-    markers: workoutKeys,
-    selectedKey: ui.selectedDate,
-    title: `${MONTH_EN[m.getMonth()]} ${m.getFullYear()}`,
-    onSelect: key => { selectHomeDate(key); renderHome(); },
-    onMonthChange: d => { ui.homeMonth = new Date(m.getFullYear(), m.getMonth() + d, 1); renderHome(); },
-  });
-
-  // 負荷量統計
-  const today = todayKey();
-  const v7 = rangeVolume(addDays(today, -6), today);
-  const v28 = rangeVolume(addDays(today, -27), today);
-  const vAll = totalVolume();
-  const fmtT = v => `${(v / 1000).toFixed(1)} t`;
-  $("#stat-vol-7d").textContent = fmtT(v7);
-  $("#stat-vol-28d").textContent = fmtT(v28);
-  $("#stat-vol-all").textContent = fmtT(vAll);
-  const [car, bus, plane] = VOLUME_COMPARES;
-  $("#stat-cmp-7d").textContent = `${car.icon} × ${(v7 / 1000 / car.tons).toFixed(1)}`;
-  $("#stat-cmp-28d").textContent = `${bus.icon} × ${(v28 / 1000 / bus.tons).toFixed(1)}`;
-  $("#stat-cmp-all").textContent = `${plane.icon} × ${(vAll / 1000 / plane.tons).toFixed(1)}`;
-
-  // 週バー（今週〜5週前）
-  const ws = weekStart(today);
-  const weeks = [];
-  for (let i = 0; i < 6; i++) {
-    const start = addDays(ws, -7 * i);
-    weeks.push({ label: i === 0 ? "今週" : `${i}週前`, v: rangeVolume(start, addDays(start, 6)) });
-  }
-  const maxW = Math.max(...weeks.map(w => w.v), 1);
-  $("#week-bars").innerHTML = weeks.map(w => `
-    <div class="week-bar-row">
-      <span class="lbl">${w.label}</span>
-      <span class="bar-track"><span class="bar" style="width:${Math.round((w.v / maxW) * 100)}%"></span></span>
-    </div>`).join("");
-
-  // アーカイブ日数
-  const monthPrefix = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`;
-  $("#month-days").textContent = [...workoutKeys].filter(k => k.startsWith(monthPrefix)).length;
-  $("#total-days").textContent = workoutKeys.size;
-
   // この日の記録をシェアできるか
   $("#btn-share-day").hidden = !buildDaySummary(state, ui.selectedDate).hasContent;
 }
@@ -450,15 +404,10 @@ $("#btn-entry-kickboxing").addEventListener("click", () => {
   showView("kickboxing");
 });
 $("#btn-entry-weight").addEventListener("click", () => {
-  const key = ui.selectedDate;
-  if ((state.workouts[key] || []).length) {
-    ui.workoutDate = key;
-    showView("workout");
-    return;
-  }
-  ui.pickerDate = key;
+  ui.pickerDate = ui.selectedDate;
   ui.pickerFrom = "home";
-  showView("picker");
+  ui.pickerPart = null;
+  showView("parts");
 });
 
 $("#btn-copy-workout").addEventListener("click", () => {
@@ -526,14 +475,18 @@ function lastDoneLabel(part) {
 }
 
 function renderPicker() {
-  $("#picker-date-label").textContent = ui.pickerDate.replaceAll("-", "/");
+  const focusedPart = ui.pickerPart;
+  $("#picker-date-label").textContent = focusedPart ? `${focusedPart}の種目` : ui.pickerDate.replaceAll("-", "/");
+  $("#picker-context").hidden = !focusedPart;
+  if (focusedPart) $("#picker-context-date").textContent = `${ui.pickerDate.replaceAll("-", "/")} の記録`;
   $("#btn-picker-edit").textContent = ui.pickerEdit ? "完了" : "Edit";
   $("#btn-copy-workout").disabled = !previousWorkoutDate(ui.pickerDate);
   const wrap = $("#picker-groups");
   wrap.innerHTML = "";
   const dayEntries = state.workouts[ui.pickerDate] || [];
+  if (focusedPart === CORE_PART) wrap.appendChild(coreMenuEntry());
 
-  for (const part of state.parts) {
+  for (const part of (focusedPart ? [focusedPart] : state.parts)) {
     const exs = state.exercises.filter(e => e.part === part);
     const last = lastDoneLabel(part);
     const group = el(`<div class="picker-group">
@@ -580,6 +533,81 @@ function renderPicker() {
   }
 }
 
+/* ================= ウェイト：部位選択 ================= */
+const CORE_PART = "腹筋";
+const PART_HUES = [8, 212, 145, 268, 34, 322, 190, 96];
+
+function partMark(part, index) {
+  return { label: part.slice(0, 1), hue: PART_HUES[index % PART_HUES.length] };
+}
+
+function openPickerForPart(part) {
+  ui.pickerPart = part;
+  ui.pickerFrom = "parts";
+  showView("picker");
+}
+
+// 腹筋の種目一覧に差し込む「15分メニュー」の入口
+function coreMenuEntry() {
+  const entry = el(`<button type="button" class="core-entry" id="btn-core-entry">
+    <span class="core-entry-mark" aria-hidden="true">🔥</span>
+    <span class="core-entry-copy">
+      <strong>腹筋トレーニング</strong>
+      <small>全15種目・約15分の高強度メニュー</small>
+    </span>
+    <span class="core-entry-arrow" aria-hidden="true">›</span>
+  </button>`);
+  entry.addEventListener("click", () => { ui.coreFrom = "picker"; showViewAndFocus("core", "#core-title"); });
+  return entry;
+}
+
+function renderParts() {
+  const key = ui.pickerDate;
+  const entries = state.workouts[key] || [];
+  $("#parts-date").textContent = `${fmtDateJP(key)} の記録`;
+
+  // その日の記録サマリ
+  const dayWrap = $("#parts-day");
+  if (entries.length) {
+    const sets = entries.reduce((sum, en) => sum + (en.sets || []).length, 0);
+    const volume = entries.reduce(
+      (sum, en) => sum + (en.sets || []).reduce((v, s) => v + (Number(s.w) || 0) * (Number(s.r) || 0), 0), 0);
+    dayWrap.innerHTML = `<button type="button" class="parts-day-card" id="btn-parts-day">
+      <span class="parts-day-label">この日のトレーニング</span>
+      <strong>${entries.length}種目 ・ ${sets}セット</strong>
+      <small>${Math.round(volume).toLocaleString("ja-JP")} kg の負荷量</small>
+      <span class="parts-day-arrow" aria-hidden="true">›</span>
+    </button>`;
+    $("#btn-parts-day").addEventListener("click", () => { ui.workoutDate = key; showView("workout"); });
+  } else {
+    dayWrap.innerHTML = "";
+  }
+
+  // 部位の分岐
+  const list = $("#parts-list");
+  list.innerHTML = "";
+  state.parts.forEach((part, index) => {
+    const exs = state.exercises.filter(e => e.part === part);
+    const added = entries.filter(en => entryPart(en) === part).length;
+    const last = lastDoneLabel(part);
+    const mark = partMark(part, index);
+    const meta = [`${exs.length}種目`, added ? `${added}種目を記録済み` : last ? `前回 ${last}` : "まだ記録なし"].join(" ・ ");
+    const card = el(`<button type="button" class="part-card">
+      <span class="part-mark" style="background:hsl(${mark.hue} 60% 52%)">${esc(mark.label)}</span>
+      <span class="part-copy">
+        <strong>${esc(part)}${part === CORE_PART ? '<span class="part-badge">15分メニュー</span>' : ""}</strong>
+        <small>${esc(meta)}</small>
+      </span>
+      <span class="part-arrow" aria-hidden="true">›</span>
+    </button>`);
+    card.addEventListener("click", () => openPickerForPart(part));
+    list.appendChild(card);
+  });
+}
+
+$("#btn-parts-back").addEventListener("click", () => showView("home"));
+$("#btn-parts-add").addEventListener("click", () => promptAddPart(renderParts));
+
 function addExerciseToDay(ex) {
   const key = ui.pickerDate;
   if (!state.workouts[key]) state.workouts[key] = [];
@@ -610,7 +638,7 @@ function promptAddExercise(part) {
   box.querySelector("#new-ex-name").focus();
 }
 
-$("#btn-add-part").addEventListener("click", () => {
+function promptAddPart(onDone = renderPicker) {
   const box = openModal(`
     <h3>部位を追加</h3>
     <input type="text" id="new-part-name" class="input" placeholder="部位名（例: 全身）">
@@ -624,11 +652,13 @@ $("#btn-add-part").addEventListener("click", () => {
     if (!name) return;
     if (state.parts.includes(name)) { toast("同じ部位が既にあります"); return; }
     state.parts.push(name);
-    save(); closeModal(); renderPicker();
+    save(); closeModal(); onDone();
   });
-});
+}
+$("#btn-add-part").addEventListener("click", () => promptAddPart(renderPicker));
 
-$("#btn-picker-back").addEventListener("click", () => showView(ui.pickerFrom));
+$("#btn-picker-back").addEventListener("click", () => showView(ui.pickerPart ? "parts" : ui.pickerFrom));
+$("#btn-picker-parts").addEventListener("click", () => { ui.pickerPart = null; showView("parts"); });
 $("#btn-picker-edit").addEventListener("click", () => { ui.pickerEdit = !ui.pickerEdit; renderPicker(); });
 
 /* ================= ワークアウト詳細 ================= */
@@ -851,6 +881,7 @@ $("#btn-workout-back").addEventListener("click", () => {
 $("#btn-workout-add").addEventListener("click", () => {
   ui.pickerDate = ui.workoutDate;
   ui.pickerFrom = "workout";
+  ui.pickerPart = null;
   showView("picker");
 });
 
@@ -1749,6 +1780,20 @@ window.addEventListener("hashchange", handleJoinLink);
 
 /* ================= 履歴 / 分析 ================= */
 function renderHistory() {
+  const part = ui.historyPart;
+
+  // カレンダーに印を付ける日（部位フィルタを反映）
+  const markers = new Set(
+    Object.keys(state.workouts).filter(k =>
+      (state.workouts[k] || []).some(en => (part === "ALL" || entryPart(en) === part) && en.sets.length))
+  );
+  if (part === "ALL" || part === "有酸素") {
+    Object.keys(state.runs || {}).forEach(k => {
+      if (runsForDay(k).length) markers.add(k);
+    });
+  }
+  renderHistoryVolume(markers);
+
   // 部位タブ
   const tabs = $("#part-tabs");
   tabs.innerHTML = "";
@@ -1767,27 +1812,55 @@ function renderHistory() {
   $("#history-graph-pane").hidden = ui.historyMode !== "graph";
 
   if (ui.historyMode === "calendar") {
-    const markers = new Set(
-      Object.keys(state.workouts).filter(k =>
-        (state.workouts[k] || []).some(en => (ui.historyPart === "ALL" || entryPart(en) === ui.historyPart) && en.sets.length))
-    );
-    if (ui.historyPart === "ALL" || ui.historyPart === "有酸素") {
-      Object.keys(state.runs || {}).forEach(k => {
-        if (runsForDay(k).length) markers.add(k);
-      });
-    }
-    const m = ui.historyMonth;
-    renderCalendar($("#history-calendar"), m, {
-      light: true,
-      markers,
-      selectedKey: ui.historySelected,
-      onSelect: key => { ui.historySelected = key; renderHistory(); },
-      onMonthChange: d => { ui.historyMonth = new Date(m.getFullYear(), m.getMonth() + d, 1); renderHistory(); },
-    });
     renderHistoryDayDetail();
   } else {
     renderHistoryGraphs();
   }
+}
+
+// 履歴タブ上部のカレンダー・負荷量（旧ホームのヒーロー）
+function renderHistoryVolume(markers) {
+  const m = ui.historyMonth;
+  renderCalendar($("#history-calendar"), m, {
+    markers,
+    selectedKey: ui.historySelected,
+    title: `${MONTH_EN[m.getMonth()]} ${m.getFullYear()}`,
+    onSelect: key => { ui.historySelected = key; renderHistory(); },
+    onMonthChange: d => { ui.historyMonth = new Date(m.getFullYear(), m.getMonth() + d, 1); renderHistory(); },
+  });
+
+  const part = ui.historyPart;
+  const today = todayKey();
+  const v7 = rangeVolume(addDays(today, -6), today, part);
+  const v28 = rangeVolume(addDays(today, -27), today, part);
+  const vAll = totalVolume(part);
+  const fmtT = v => `${(v / 1000).toFixed(1)} t`;
+  $("#stat-vol-7d").textContent = fmtT(v7);
+  $("#stat-vol-28d").textContent = fmtT(v28);
+  $("#stat-vol-all").textContent = fmtT(vAll);
+  const [car, bus, plane] = VOLUME_COMPARES;
+  $("#stat-cmp-7d").textContent = `${car.icon} × ${(v7 / 1000 / car.tons).toFixed(1)}`;
+  $("#stat-cmp-28d").textContent = `${bus.icon} × ${(v28 / 1000 / bus.tons).toFixed(1)}`;
+  $("#stat-cmp-all").textContent = `${plane.icon} × ${(vAll / 1000 / plane.tons).toFixed(1)}`;
+
+  // 週バー（今週〜5週前）
+  const ws = weekStart(today);
+  const weeks = [];
+  for (let i = 0; i < 6; i++) {
+    const start = addDays(ws, -7 * i);
+    weeks.push({ label: i === 0 ? "今週" : `${i}週前`, v: rangeVolume(start, addDays(start, 6), part) });
+  }
+  const maxW = Math.max(...weeks.map(w => w.v), 1);
+  $("#week-bars").innerHTML = weeks.map(w => `
+    <div class="week-bar-row">
+      <span class="lbl">${w.label}</span>
+      <span class="bar-track"><span class="bar" style="width:${Math.round((w.v / maxW) * 100)}%"></span></span>
+    </div>`).join("");
+
+  // 実施日数（MONTHLY ARCHIVE）
+  const monthPrefix = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`;
+  $("#month-days").textContent = [...markers].filter(k => k.startsWith(monthPrefix)).length;
+  $("#total-days").textContent = markers.size;
 }
 
 function renderHistoryDayDetail() {
@@ -2202,8 +2275,7 @@ function finishCoreSession() {
   $("#core-list").scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
-$("#btn-entry-core").addEventListener("click", () => showViewAndFocus("core", "#core-title"));
-$("#btn-core-back").addEventListener("click", () => showViewAndFocus("home", "#btn-entry-core"));
+$("#btn-core-back").addEventListener("click", () => showViewAndFocus(ui.coreFrom === "picker" ? "picker" : "home", ui.coreFrom === "picker" ? "#picker-date-label" : "#btn-entry-weight"));
 $("#btn-core-start").addEventListener("click", startCoreSession);
 $("#btn-core-session-close").addEventListener("click", () => stopCoreSession());
 $("#btn-core-session-toggle").addEventListener("click", toggleCoreSession);

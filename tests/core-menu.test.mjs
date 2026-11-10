@@ -60,18 +60,22 @@ test("the guided session is 40s work / 20s rest and totals 15 minutes", () => {
 });
 
 test("home menu and core screen are wired", () => {
-  assert.match(html, /id="btn-entry-core"[\s\S]*?<strong>腹筋<\/strong>/);
-  assert.ok(html.indexOf('id="btn-entry-core"') > html.indexOf('id="btn-entry-weight"'));
+  // 腹筋メニューは「ウェイト > 部位（腹筋）」の中に入っている
+  assert.doesNotMatch(html, /id="btn-entry-core"/);
+  assert.match(app, /const CORE_PART = "腹筋";/);
+  assert.match(app, /if \(focusedPart === CORE_PART\) wrap\.appendChild\(coreMenuEntry\(\)\);/);
+  assert.match(app, /<strong>腹筋トレーニング<\/strong>/);
   assert.match(html, /id="view-core"/);
   assert.match(html, /id="core-list"/);
   assert.match(html, /id="btn-core-start"/);
   assert.match(html, /id="core-session"/);
   assert.match(html, /id="core-filters"/);
   assert.match(html, /id="core-cautions"/);
-  assert.match(app, /btn-entry-core"\)\.addEventListener\("click", \(\) => showViewAndFocus\("core", "#core-title"\)\)/);
+  assert.match(app, /entry\.addEventListener\("click", \(\) => \{ ui\.coreFrom = "picker"; showViewAndFocus\("core", "#core-title"\); \}\)/);
+  assert.match(app, /ui\.coreFrom === "picker" \? "picker" : "home"/);
   assert.match(app, /if \(ui\.view === "core" && name !== "core"\) stopCoreSession\(\{ silent: true \}\);/);
   assert.match(app, /core: renderCore/);
-  assert.match(app, /name === "core" \? "home" : name/);
+  assert.match(app, /name === "core" \|\| name === "parts" \? "home" : name/);
 });
 
 test("the session timer advances, pauses and stops", () => {

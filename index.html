@@ -67,15 +67,7 @@
             <span class="entry-choice-icon" aria-hidden="true">🏋️</span>
             <span class="entry-choice-copy">
               <strong>ウェイト</strong>
-              <small id="entry-weight-status">種目・重量を記録</small>
-            </span>
-            <span class="entry-choice-arrow" aria-hidden="true">›</span>
-          </button>
-          <button type="button" class="entry-choice core" id="btn-entry-core">
-            <span class="entry-choice-icon" aria-hidden="true">🔥</span>
-            <span class="entry-choice-copy">
-              <strong>腹筋</strong>
-              <small id="entry-core-status">15種目・15分の高強度メニュー</small>
+              <small id="entry-weight-status">部位を選んで種目・重量を記録</small>
             </span>
             <span class="entry-choice-arrow" aria-hidden="true">›</span>
           </button>
@@ -91,43 +83,28 @@
       </div>
 
       <div class="home-body">
-        <h2 class="section-heading">📅 カレンダー・負荷量</h2>
-        <div class="hero">
-          <div class="hero-grid">
-            <div class="cal-wrap" id="home-calendar"></div>
-            <div class="stats-col">
-              <div class="stat-card">
-                <div class="stat-title">合計負荷量/7日間</div>
-                <div class="stat-value-row">
-                  <span class="stat-value" id="stat-vol-7d">0 t</span>
-                  <span class="stat-compare" id="stat-cmp-7d">🚗 × 0.0</span>
-                </div>
-                <div class="week-bars" id="week-bars"></div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-title">合計負荷量/28日間</div>
-                <div class="stat-value-row">
-                  <span class="stat-value" id="stat-vol-28d">0 t</span>
-                  <span class="stat-compare" id="stat-cmp-28d">🚌 × 0.0</span>
-                </div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-title">総合計負荷量</div>
-                <div class="stat-value-row">
-                  <span class="stat-value" id="stat-vol-all">0 t</span>
-                  <span class="stat-compare" id="stat-cmp-all">✈️ × 0.0</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="archive-row">
-            <span class="archive-label">MONTHLY<br>ARCHIVE</span>
-            <span class="archive-days"><b id="month-days">0</b> days</span>
-            <span class="archive-total">TOTAL <b id="total-days">0</b> days</span>
-          </div>
-        </div>
         <button type="button" class="btn-outline full share-day-btn" id="btn-share-day">📤 この日の記録をSNSでシェア</button>
       </div>
+    </section>
+
+    <!-- ============ ウェイト（部位選択） ============ -->
+    <section class="view" id="view-parts" hidden>
+      <header class="app-header slim">
+        <button class="icon-btn" id="btn-parts-back" aria-label="ホームへ戻る">‹</button>
+        <h1>ウェイト</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <div class="parts-head">
+        <p class="parts-date" id="parts-date"></p>
+        <h2>部位を選ぶ</h2>
+        <p class="parts-lead">部位ごとに種目を選んで、重量と回数を記録します。</p>
+      </div>
+      <div id="parts-day"></div>
+      <div id="parts-list"></div>
+      <div class="parts-actions">
+        <button type="button" class="btn-outline full" id="btn-parts-add">＋ 部位を追加</button>
+      </div>
+      <p class="parts-note">腹筋は、種目を選ぶ記録のほかに「15種目・15分の腹筋トレーニング」も開けます。</p>
     </section>
 
     <!-- ============ ストレッチ ============ -->
@@ -186,13 +163,46 @@
     <!-- ============ 履歴/分析 ============ -->
     <section class="view" id="view-history" hidden>
       <header class="app-header slim"><h1>履歴 / 分析</h1></header>
+      <div class="hero history-hero">
+        <div class="hero-grid">
+          <div class="cal-wrap" id="history-calendar"></div>
+          <div class="stats-col">
+            <div class="stat-card">
+              <div class="stat-title">合計負荷量/7日間</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-7d">0 t</span>
+                <span class="stat-compare" id="stat-cmp-7d">🚗 × 0.0</span>
+              </div>
+              <div class="week-bars" id="week-bars"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">合計負荷量/28日間</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-28d">0 t</span>
+                <span class="stat-compare" id="stat-cmp-28d">🚌 × 0.0</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">総合計負荷量</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="stat-vol-all">0 t</span>
+                <span class="stat-compare" id="stat-cmp-all">✈️ × 0.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="archive-row">
+          <span class="archive-label">MONTHLY<br>ARCHIVE</span>
+          <span class="archive-days"><b id="month-days">0</b> days</span>
+          <span class="archive-total">TOTAL <b id="total-days">0</b> days</span>
+        </div>
+      </div>
       <div class="part-tabs" id="part-tabs"></div>
       <div class="seg-toggle">
         <button class="seg active" data-mode="calendar">カレンダー</button>
         <button class="seg" data-mode="graph">グラフ</button>
       </div>
       <div id="history-calendar-pane">
-        <div class="cal-wrap light" id="history-calendar"></div>
         <div id="history-day-detail"></div>
       </div>
       <div id="history-graph-pane" hidden>
@@ -680,6 +690,10 @@
         <h1 id="picker-date-label">種目を選択</h1>
         <button class="text-btn" id="btn-picker-edit">Edit</button>
       </header>
+      <div class="picker-context" id="picker-context" hidden>
+        <span id="picker-context-date"></span>
+        <button type="button" id="btn-picker-parts">部位を変更</button>
+      </div>
       <div class="picker-toolbar">
         <button class="btn-outline small" id="btn-copy-workout">⏱ 前回メニューをコピー</button>
         <button class="btn-outline small" id="btn-add-part">＋ 部位・種目を追加</button>
@@ -721,3 +735,7 @@
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
+    <!-- ============ ウェイト（部位選択） ============ -->
+    
+
+    <!-- ============ ストレッチ ============ -->
