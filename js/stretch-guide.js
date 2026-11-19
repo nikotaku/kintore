@@ -1,4 +1,4 @@
-// 胸椎ストレッチ（アニメーション付きガイド）の定義
+// ストレッチのアニメーション付きガイド（胸椎・肩）の定義
 // 参考にした動きを、外部画像・動画なしで動きが伝わるようにSVGで再構成している。
 // 各SVGのアニメーションは css/style.css の .stretch-fig 系クラスで制御する。
 
@@ -77,3 +77,98 @@ export const STRETCH_GUIDE = [
 
 export const STRETCH_GUIDE_NOTE =
   "呼吸を止めず、痛みのない範囲で。反動をつけずに、息を吐きながら30秒ほどキープします。";
+
+// 肩周辺のストレッチ（筋トレTV「肩周辺のストレッチ／ストレッチ講座－筋トレ前後－」の動きと回数を参考に再構成）
+export const SHOULDER_GUIDE = [
+  {
+    no: 1,
+    id: "shoulder-cross-body",
+    name: "腕を胸に引き寄せる肩のストレッチ",
+    purpose: "肩の後ろ / 肩甲骨まわり",
+    dose: "20〜30秒 × 左右",
+    how: "あぐらで座り、片腕を胸の前で反対側へまっすぐ伸ばす。もう一方の腕で肘のあたりを抱え、胸へ引き寄せる。",
+    points: ["肩をすくめず、首はまっすぐ", "息を吐きながらじわっと引き寄せる"],
+    svg: figure("あぐらで座り、片腕を胸の前で引き寄せるストレッチの動き", `
+      ${limb("M120 110 L92 118 L120 128")}
+      ${limb("M120 110 L148 118 L120 128")}
+      ${limb("M120 110 L120 70")}
+      ${limb("M104 72 L136 72")}
+      ${head(120, 54)}
+      <g class="fig-move fig-pull-01">
+        ${limb("M104 72 L160 80")}
+        ${limb("M136 72 L142 96 L122 82")}
+      </g>
+      ${hint("M168 66 C178 66 186 72 188 82")}`),
+  },
+  {
+    no: 2,
+    id: "shoulder-arm-twist",
+    name: "両腕を横に伸ばして腕ねじり",
+    purpose: "肩関節の回旋 / 肩のインナーマッスル",
+    dose: "10回 × 2セット",
+    how: "立って両腕を肩の高さで真横に伸ばす。腕を一直線に保ったまま、肩の付け根から腕全体を前・後ろへねじる。",
+    points: ["首と体の軸は動かさない", "肘を曲げず、手首だけでごまかさない"],
+    svg: figure("両腕を真横に伸ばし、腕全体を前後にねじる動き", `
+      ${limb("M120 96 L110 132")}
+      ${limb("M120 96 L130 132")}
+      ${limb("M120 96 L120 60")}
+      ${head(120, 44)}
+      ${limb("M120 62 L62 62")}
+      ${limb("M120 62 L178 62")}
+      <g class="fig-move fig-twist-l"><path d="M64 62 C60 72 52 72 48 62 Z" fill="currentColor"/></g>
+      <g class="fig-move fig-twist-r"><path d="M176 62 C180 72 188 72 192 62 Z" fill="currentColor"/></g>
+      ${hint("M92 50 C100 50 102 74 92 74")}
+      ${hint("M148 50 C140 50 138 74 148 74")}`),
+  },
+  {
+    no: 3,
+    id: "shoulder-roll",
+    name: "肩回し（前・後ろ）",
+    purpose: "首の付け根 / 肩甲骨まわり",
+    dose: "前後10回ずつ × 2セット",
+    how: "立って腕の力を抜き、肩を大きく回す。前回しを10回、後ろ回しを10回行う。",
+    points: ["腕はだらんと下ろしたまま", "肩甲骨から大きな円を描くように"],
+    svg: figure("腕の力を抜いて、肩を前後に大きく回す動き", `
+      ${limb("M120 96 L110 132")}
+      ${limb("M120 96 L130 132")}
+      ${limb("M120 96 L120 62")}
+      ${head(120, 44)}
+      <g class="fig-move fig-roll">
+        ${limb("M104 64 L136 64")}
+        ${limb("M104 64 L98 92 L100 116")}
+        ${limb("M136 64 L142 92 L140 116")}
+      </g>
+      ${hint("M83 52 a7 7 0 1 1 14 0 a7 7 0 1 1 -14 0")}
+      ${hint("M143 52 a7 7 0 1 1 14 0 a7 7 0 1 1 -14 0")}`),
+  },
+];
+
+// ストレッチ画面の分岐（部位ごとのガイド）
+export const STRETCH_AREAS = [
+  {
+    id: "thoracic",
+    label: "胸椎",
+    kicker: "THORACIC MOBILITY",
+    title: "胸椎ストレッチ",
+    lead: "動きが見えるアニメーションで、フォームを確認しながら30秒ずつ。椅座位や膝立ちで、どこでもできます。",
+    note: STRETCH_GUIDE_NOTE,
+    guides: STRETCH_GUIDE,
+  },
+  {
+    id: "shoulder",
+    label: "肩",
+    kicker: "SHOULDER CARE",
+    title: "肩周辺のストレッチ",
+    lead: "筋トレの前は軽めに、筋トレの後は入念に。座って伸ばすストレッチと、立って動かすストレッチを組み合わせます。",
+    note: "痛みのない範囲で。座って伸ばすものは反動をつけずに20〜30秒、立って動かすものは大きくゆっくり回数を目安に行います。",
+    guides: SHOULDER_GUIDE,
+  },
+];
+
+export function stretchArea(id) {
+  return STRETCH_AREAS.find(area => area.id === id) || STRETCH_AREAS[0];
+}
+
+export function guideDose(guide) {
+  return guide.dose || `${guide.seconds}秒 × ${guide.sides}`;
+}
