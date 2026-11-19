@@ -13,7 +13,7 @@ import { lineChart, barChart } from "./charts.js";
 import { getExerciseVideo, saveExerciseVideo, deleteExerciseVideo, clearExerciseVideos } from "./video-store.js";
 import { buildDaySummary, formatShareText, drawShareCard, canvasToFile, shareUrls } from "./share.js";
 import { formatAIContext } from "./ai-context.js";
-import { STRETCH_GUIDE, STRETCH_GUIDE_NOTE } from "./stretch-guide.js";
+import { STRETCH_AREAS, stretchArea, guideDose } from "./stretch-guide.js";
 import {
   CORE_GUIDE,
   CORE_MENU,
@@ -59,6 +59,8 @@ import {
 } from "./cloud-sync.js";
 
 /* ================= グローバルUI状態 ================= */
+const STRETCH_AREA_KEY = "kintore-stretch-area-v1"; // ストレッチ画面で最後に開いた部位
+
 const ui = {
   view: "home",
   selectedDate: todayKey(),   // ホームで選択中の日付（起動時は今日を自動入力）
@@ -81,6 +83,7 @@ const ui = {
   coreFrom: "picker",         // 腹筋メニューの戻り先
   groupMemberId: null,        // 表示中のグループ（この端末の参加情報のID）
   groupWeek: null,            // グループ画面で表示中の週（月曜のキー）
+  stretchArea: loadStretchArea(), // ストレッチ画面で開いている部位（胸椎・肩）
 };
 
 const $ = sel => document.querySelector(sel);
@@ -343,9 +346,11 @@ function renderHomeEntry() {
   $("#btn-entry-kickboxing").classList.toggle("done", kickboxingCount > 0);
 
   const stretchCount = stretchList().length;
+  const guideCount = STRETCH_AREAS.reduce((sum, area) => sum + area.guides.length, 0);
+  const guideLabel = `${STRETCH_AREAS.map(area => area.label).join("・")}のストレッチ${guideCount}種`;
   $("#entry-stretch-status").textContent = stretchCount
-    ? `胸椎ストレッチ3種・登録${stretchCount}件`
-    : "胸椎ストレッチ3種のアニメーション";
+    ? `${guideLabel}・登録${stretchCount}件`
+    : `${guideLabel}のアニメーション`;
 
   const exerciseCount = (state.workouts[key] || []).length;
   $("#entry-weight-status").textContent = exerciseCount ? `${exerciseCount}種目 記録済み` : "部位を選んで種目・重量を記録";
@@ -911,24 +916,63 @@ function stretchCard(id) {
   return [...document.querySelectorAll("#stretch-list .stretch-card")].find(card => card.dataset.stretchId === id);
 }
 
+function loadStretchArea() {
+  try {
+    return stretchArea(localStorage.getItem(STRETCH_AREA_KEY)).id;
+  } catch {
+    return STRETCH_AREAS[0].id;
+  }
+}
+
+function selectStretchArea(id) {
+  ui.stretchArea = stretchArea(id).id;
+  try { localStorage.setItem(STRETCH_AREA_KEY, ui.stretchArea); } catch { /* 保存できなくても表示は切り替える */ }
+  renderStretchGuide();
+}
+
+// 部位の分岐（胸椎・肩）を切り替えて、その部位のアニメーション付きガイドを描く
 function renderStretchGuide() {
   const list = $("#stretch-guide-list");
-  if (!list || list.dataset.ready === "1") return;
-  list.innerHTML = STRETCH_GUIDE.map((guide, index) => `<article class="stretch-guide-card" style="animation-delay:${index * 90}ms">
+  if (!list) return;
+  const area = stretchArea(ui.stretchArea);
+
+  const tabs = $("#stretch-area-tabs");
+  tabs.innerHTML = STRETCH_AREAS.map(item => `<button type="button" class="stretch-area-tab" role="tab"
+      id="stretch-tab-${item.id}" data-area="${item.id}" aria-controls="stretch-guide-list"
+      aria-selected="${item.id === area.id}" tabindex="${item.id === area.id ? 0 : -1}">
+      ${esc(item.label)}<small>${item.guides.length}種</small>
+    </button>`).join("");
+  tabs.querySelectorAll(".stretch-area-tab").forEach(tab => {
+    tab.addEventListener("click", () => selectStretchArea(tab.dataset.area));
+    tab.addEventListener("keydown", e => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const index = STRETCH_AREAS.findIndex(item => item.id === area.id);
+      const next = STRETCH_AREAS[(index + (e.key === "ArrowRight" ? 1 : -1) + STRETCH_AREAS.length) % STRETCH_AREAS.length];
+      selectStretchArea(next.id);
+      $(`#stretch-tab-${next.id}`)?.focus();
+    });
+  });
+  list.setAttribute("aria-labelledby", `stretch-tab-${area.id}`);
+
+  if (list.dataset.area === area.id) return;
+  $("#stretch-guide-kicker").textContent = area.kicker;
+  $("#stretch-guide-title").textContent = area.title;
+  $("#stretch-guide-lead").textContent = area.lead;
+  list.innerHTML = area.guides.map((guide, index) => `<article class="stretch-guide-card" style="animation-delay:${index * 90}ms">
       <div class="stretch-guide-visual">${guide.svg}</div>
       <div class="stretch-guide-body">
         <div class="stretch-guide-title">
           <span class="stretch-guide-no">${String(guide.no).padStart(2, "0")}</span>
           <h3>${esc(guide.name)}</h3>
-          <span class="stretch-guide-time">${guide.seconds}秒 × ${esc(guide.sides)}</span>
+          <span class="stretch-guide-time">${esc(guideDose(guide))}</span>
         </div>
         <p class="stretch-guide-purpose">${esc(guide.purpose)}</p>
         <p class="stretch-guide-how">${esc(guide.how)}</p>
         <ul class="stretch-guide-points">${guide.points.map(point => `<li>${esc(point)}</li>`).join("")}</ul>
       </div>
     </article>`).join("");
-  list.dataset.ready = "1";
-  $("#stretch-guide-note").textContent = STRETCH_GUIDE_NOTE;
+  list.dataset.area = area.id;
+  $("#stretch-guide-note").textContent = area.note;
 }
 
 function renderStretch() {

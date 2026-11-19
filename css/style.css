@@ -947,6 +947,18 @@ body {
 }
 /* ---------- ストレッチ（胸椎ガイド・アニメーション） ---------- */
 .stretch-guide { margin: 12px; }
+.stretch-area-tabs {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+  margin-bottom: 10px; padding: 4px; border-radius: 14px; background: #e3e7f8;
+}
+.stretch-area-tab {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px;
+  border: none; border-radius: 11px; background: transparent; cursor: pointer;
+  color: #4a5570; font-size: .95rem; font-weight: 800;
+}
+.stretch-area-tab small { font-size: .68rem; font-weight: 700; color: #7b86b8; }
+.stretch-area-tab[aria-selected="true"] { background: #fff; color: #283593; box-shadow: 0 1px 4px rgba(40,53,147,.16); }
+.stretch-area-tab:focus-visible { outline: 3px solid #8896e8; outline-offset: 1px; }
 .stretch-guide-head {
   padding: 14px; border-radius: 16px;
   background: linear-gradient(135deg, #eef1ff 0%, #f8f9ff 100%);
@@ -992,6 +1004,26 @@ body {
 @keyframes stretchTwist {
   0%, 100% { transform: rotate(-6deg); }
   50% { transform: rotate(8deg); }
+}
+/* 肩：腕を胸に引き寄せる・腕ねじり・肩回し */
+.stretch-fig .fig-move { transform-box: view-box; }
+.stretch-fig .fig-pull-01 { transform-origin: 104px 72px; animation: shoulderPull 4.4s ease-in-out infinite; }
+.stretch-fig .fig-twist-l { transform-origin: 56px 62px; animation: armTwist 3.2s ease-in-out infinite; }
+.stretch-fig .fig-twist-r { transform-origin: 184px 62px; animation: armTwist 3.2s ease-in-out infinite; }
+.stretch-fig .fig-roll { transform-origin: 120px 64px; animation: shoulderRoll 2.8s ease-in-out infinite; }
+@keyframes shoulderPull {
+  0%, 100% { transform: scaleX(.84) rotate(3deg); }
+  50% { transform: scaleX(1.08) rotate(-2deg); }
+}
+@keyframes armTwist {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(-1); }
+}
+@keyframes shoulderRoll {
+  0%, 100% { transform: translateY(2px) scaleX(1.04); }
+  25% { transform: translateY(-7px) scaleX(1); }
+  50% { transform: translateY(-3px) scaleX(.94); }
+  75% { transform: translateY(3px) scaleX(.98); }
 }
 .stretch-guide-body { padding: 12px 14px 14px; }
 .stretch-guide-title { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
@@ -1124,6 +1156,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .stretch-guide-card,
   .stretch-fig .fig-open,
+  .stretch-fig .fig-move,
   .stretch-fig .fig-hint,
   .entry-choice.stretch .entry-choice-icon { animation: none !important; }
 }
