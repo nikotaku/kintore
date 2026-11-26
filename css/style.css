@@ -1180,6 +1180,26 @@ body {
   .entry-choice.stretch .entry-choice-icon { animation: none !important; }
   .stretch-fig .fig-pose-b { opacity: 0; }
 }
+/* ---------- ウェイト：部位の種目のフォーム動画 ---------- */
+.picker-mode {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+  margin: 10px 12px 0; padding: 4px; border-radius: 14px; background: #f3dfdd;
+}
+.picker-mode-tab {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px;
+  border: none; border-radius: 11px; background: transparent; cursor: pointer;
+  color: #7a4a46; font-size: .92rem; font-weight: 800;
+}
+.picker-mode-tab small { font-size: .68rem; font-weight: 700; color: #b0706a; }
+.picker-mode-tab[aria-selected="true"] { background: #fff; color: var(--red-dark); box-shadow: 0 1px 4px rgba(201,36,28,.16); }
+.picker-mode-tab:focus-visible { outline: 3px solid var(--red-light); outline-offset: 1px; }
+.weight-video-lead { padding: 12px 16px 0; color: #555; font-size: .82rem; line-height: 1.6; }
+.weight-video-empty { margin: 12px; }
+.weight-video-card .stretch-card-head { background: var(--red); }
+.weight-video-card .stretch-card-actions { flex-wrap: wrap; justify-content: flex-start; }
+.weight-video-card .stretch-card-actions button { border-color: var(--red); color: var(--red); }
+.weight-video-card .stretch-card-actions .del { margin-left: auto; border-color: transparent; color: #c62828; }
+.weight-video-foot { padding: 0 12px 16px; }
 /* ---------- ウェイト：部位選択 ---------- */
 .parts-head { padding: 16px 16px 0; }
 .parts-date { font-size: .72rem; font-weight: 700; letter-spacing: .04em; color: var(--red); }
