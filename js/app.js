@@ -958,6 +958,12 @@ function renderStretchGuide() {
   $("#stretch-guide-kicker").textContent = area.kicker;
   $("#stretch-guide-title").textContent = area.title;
   $("#stretch-guide-lead").textContent = area.lead;
+  const source = $("#stretch-guide-source");
+  source.hidden = !area.source;
+  if (area.source) {
+    source.href = area.source.url;
+    source.textContent = `${area.source.label} ↗`;
+  }
   list.innerHTML = area.guides.map((guide, index) => `<article class="stretch-guide-card" style="animation-delay:${index * 90}ms">
       <div class="stretch-guide-visual">${guide.svg}</div>
       <div class="stretch-guide-body">

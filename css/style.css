@@ -967,6 +967,11 @@ body {
 .stretch-guide-kicker { font-size: .64rem; font-weight: 800; letter-spacing: .16em; color: #5c6bc0; }
 .stretch-guide-head h2 { margin-top: 3px; font-size: 1.15rem; font-weight: 800; color: #283593; }
 .stretch-guide-head p { margin-top: 6px; font-size: .8rem; line-height: 1.65; color: #4a5570; }
+.stretch-guide-source {
+  display: inline-flex; align-items: center; min-height: 32px; margin-top: 6px;
+  color: #3f51b5; font-size: .76rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
+}
+.stretch-guide-source:focus-visible { outline: 3px solid #8896e8; outline-offset: 2px; border-radius: 4px; }
 .stretch-guide-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .stretch-guide-card {
   background: #fff; border-radius: 16px; overflow: hidden;
@@ -1018,6 +1023,19 @@ body {
 @keyframes armTwist {
   0%, 100% { transform: scaleY(1); }
   50% { transform: scaleY(-1); }
+}
+/* 全身モビリティ：腕を天井へ・2つの姿勢を交互に（90/90・片膝立ち・コサック・インチワーム） */
+.stretch-fig .fig-reach-02 { transform-origin: 120px 78px; animation: reachUp 4.4s ease-in-out infinite; }
+.stretch-fig .fig-pose { animation: poseSwap 4.8s ease-in-out infinite; }
+.stretch-fig .fig-pose-b { animation-delay: -2.4s; }
+@keyframes reachUp {
+  0%, 15%, 100% { transform: rotate(150deg); }
+  45%, 65% { transform: rotate(0deg); }
+}
+@keyframes poseSwap {
+  0%, 38% { opacity: 1; }
+  50%, 88% { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes shoulderRoll {
   0%, 100% { transform: translateY(2px) scaleX(1.04); }
@@ -1157,8 +1175,10 @@ body {
   .stretch-guide-card,
   .stretch-fig .fig-open,
   .stretch-fig .fig-move,
+  .stretch-fig .fig-pose,
   .stretch-fig .fig-hint,
   .entry-choice.stretch .entry-choice-icon { animation: none !important; }
+  .stretch-fig .fig-pose-b { opacity: 0; }
 }
 /* ---------- ウェイト：部位選択 ---------- */
 .parts-head { padding: 16px 16px 0; }
