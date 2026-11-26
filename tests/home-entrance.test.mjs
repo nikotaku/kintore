@@ -43,7 +43,8 @@ test("stretch screen lists registered stretch videos stored on the device", () =
   assert.match(html, /id="stretch-guide-list"/);
   assert.match(html, /id="btn-add-stretch"/);
   assert.match(app, /const STRETCH_PART = "ストレッチ";/);
-  assert.match(app, /getExerciseVideo\(stretch\.id\)/);
+  assert.match(app, /getExerciseVideo\(exercise\.id\)/);
+  assert.match(app, /function loadStretchVideo\(stretch, card, token\) \{\s*return loadExerciseVideoInto\(stretch, card, \(\) => token === stretchRenderToken, stretchVideoUrls\);/);
   assert.match(app, /<video class="form-video" src="\$\{url\}" controls playsinline/);
   assert.match(app, /if \(ui\.view === "stretch" && name !== "stretch"\) releaseStretchVideos\(\);/);
   assert.match(css, /\.stretch-card/);

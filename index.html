@@ -115,12 +115,14 @@
         <span class="header-spacer"></span>
       </header>
       <div class="stretch-guide">
+        <div class="stretch-area-tabs" id="stretch-area-tabs" role="tablist" aria-label="ストレッチする部位"></div>
         <div class="stretch-guide-head">
-          <span class="stretch-guide-kicker">THORACIC MOBILITY</span>
-          <h2>胸椎ストレッチ</h2>
-          <p>動きが見えるアニメーションで、フォームを確認しながら30秒ずつ。椅座位や膝立ちで、どこでもできます。</p>
+          <span class="stretch-guide-kicker" id="stretch-guide-kicker">THORACIC MOBILITY</span>
+          <h2 id="stretch-guide-title">胸椎ストレッチ</h2>
+          <p id="stretch-guide-lead">動きが見えるアニメーションで、フォームを確認しながら30秒ずつ。椅座位や膝立ちで、どこでもできます。</p>
+          <a class="stretch-guide-source" id="stretch-guide-source" target="_blank" rel="noopener noreferrer" hidden></a>
         </div>
-        <div class="stretch-guide-list" id="stretch-guide-list"></div>
+        <div class="stretch-guide-list" id="stretch-guide-list" role="tabpanel"></div>
         <p class="stretch-guide-note" id="stretch-guide-note"></p>
       </div>
       <h2 class="stretch-list-heading">登録したストレッチ</h2>
@@ -694,11 +696,16 @@
         <span id="picker-context-date"></span>
         <button type="button" id="btn-picker-parts">部位を変更</button>
       </div>
-      <div class="picker-toolbar">
+      <div class="picker-mode" id="picker-mode" role="tablist" aria-label="種目の表示" hidden>
+        <button type="button" class="picker-mode-tab" role="tab" id="picker-mode-log" data-mode="log" aria-selected="true">記録する</button>
+        <button type="button" class="picker-mode-tab" role="tab" id="picker-mode-video" data-mode="video" aria-selected="false">🎥 フォーム動画<small id="picker-video-count"></small></button>
+      </div>
+      <div class="picker-toolbar" id="picker-toolbar">
         <button class="btn-outline small" id="btn-copy-workout">⏱ 前回メニューをコピー</button>
         <button class="btn-outline small" id="btn-add-part">＋ 部位・種目を追加</button>
       </div>
       <div id="picker-groups"></div>
+      <input type="file" id="picker-video-file" accept="video/*" hidden>
     </section>
 
     <!-- ============ 日別ワークアウト詳細 ============ -->
